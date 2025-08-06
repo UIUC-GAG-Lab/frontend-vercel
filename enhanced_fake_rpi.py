@@ -58,12 +58,12 @@ def simulate_test_process(test_id):
                 
             log_message(f"Test {test_id} - Processing stage {stage_index + 1}: {stage_name}")
             
-            # Simulate stage processing time (3-8 seconds per stage)
+            # Add logic here to run differnt scripts based on the given stages.
             stage_duration = 3 + (stage_index * 0.5)  # Varying duration
             time.sleep(stage_duration)
             
             if test_id not in active_tests:
-                log_message(f"⏹️ Test {test_id} was stopped during {stage_name}")
+                log_message(f"Test {test_id} was stopped during {stage_name}")
                 return
             
             # Send stage completion
@@ -84,7 +84,7 @@ def simulate_test_process(test_id):
             "timestamp": datetime.now().isoformat()
         }
         client.publish(TEST_SUB_TOPIC, json.dumps(completion_response))
-        log_message(f"🎉 Test {test_id} completed successfully!")
+        log_message(f"Test {test_id} completed successfully!")
         
         # Remove from active tests
         if test_id in active_tests:
@@ -109,7 +109,7 @@ def simulate_test_process(test_id):
 def on_connect(client, userdata, flags, rc):
     """Callback for when client connects to broker"""
     if rc == 0:
-        log_message("✅ Connected to HiveMQ Cloud broker successfully!")
+        log_message("Connected to HiveMQ Cloud broker successfully!")
         log_message(f"Session present: {flags['session present']}")
         client.subscribe(TEST_PUB_TOPIC)
         log_message(f"📡 Subscribed to topic: {TEST_PUB_TOPIC}")
@@ -122,15 +122,15 @@ def on_connect(client, userdata, flags, rc):
             5: "Connection refused - not authorised"
         }
         error_msg = error_messages.get(rc, f"Unknown error code: {rc}")
-        log_message(f"❌ Failed to connect to broker. {error_msg}")
+        log_message(f"Failed to connect to broker. {error_msg}")
 
 def on_disconnect(client, userdata, rc):
     """Callback for when client disconnects"""
     if rc != 0:
-        log_message(f"⚠️ Unexpected disconnection from HiveMQ Cloud broker (code: {rc})")
-        log_message("🔄 Client will attempt to reconnect automatically...")
+        log_message(f"Unexpected disconnection from HiveMQ Cloud broker (code: {rc})")
+        log_message("Client will attempt to reconnect automatically...")
     else:
-        log_message("✅ Clean disconnection from HiveMQ Cloud broker")
+        log_message("Clean disconnection from HiveMQ Cloud broker")
 
 def on_log(client, userdata, level, buf):
     """Callback for MQTT client logging"""
@@ -138,15 +138,15 @@ def on_log(client, userdata, level, buf):
 
 def on_publish(client, userdata, mid):
     """Callback for when message is published"""
-    log_message(f"📤 Message published with ID: {mid}")
+    log_message(f"Message published with ID: {mid}")
 
 def on_subscribe(client, userdata, mid, granted_qos):
     """Callback for when subscription is confirmed"""
-    log_message(f"📥 Subscription confirmed with QoS: {granted_qos}")
+    log_message(f"Subscription confirmed with QoS: {granted_qos}")
 
 def on_unsubscribe(client, userdata, mid):
     """Callback for when unsubscription is confirmed"""
-    log_message(f"📤 Unsubscription confirmed with ID: {mid}")
+    log_message(f"Unsubscription confirmed with ID: {mid}")
 
 def on_message(client, userdata, msg):
     """Handle incoming messages from frontend"""

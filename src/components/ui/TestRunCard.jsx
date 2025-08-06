@@ -26,26 +26,26 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
     <div className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow duration-200 ${
       isActive ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
     }`}>
-      {/* Status Badge - Top Right */}
-      <div className="p-4 pb-0">
-        <div className="flex justify-between items-start">
-          {isActive && (
-            <div className="flex items-center text-xs text-blue-600">
-              <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 animate-pulse"></div>
-              Stage {currentStage}
-            </div>
-          )}
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(run.status)}`}>
-            {run.status ? run.status.charAt(0).toUpperCase() + run.status.slice(1) : 'Unknown'}
-          </span>
+      {/* Active Stage Indicator - Top */}
+      {isActive && (
+        <div className="p-4 pb-0">
+          <div className="flex items-center text-xs text-blue-600">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 animate-pulse"></div>
+            Stage {currentStage}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Card Content */}
       <div className="p-4 pt-2">
-        {/* Run ID and Name */}
+        {/* Run ID and Status Badge */}
         <div className="mb-3">
-          <div className="text-sm text-gray-500 mb-1">Trial_id: {run.trial_id}</div>
+          <div className="flex justify-between items-center mb-1">
+            <div className="text-sm text-gray-500">Trial_id: {run.trial_id}</div>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(run.status)}`}>
+              {run.status ? run.status.charAt(0).toUpperCase() + run.status.slice(1) : 'Unknown'}
+            </span>
+          </div>
           <h3 className="text-lg font-semibold text-gray-900 leading-tight">{run.trial_name}</h3>
         </div>
 
