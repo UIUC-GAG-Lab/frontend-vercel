@@ -42,8 +42,9 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
         <div className="mb-3">
           <div className="flex justify-between items-center mb-1">
             <div className="text-sm text-gray-500">Trial_id: {run.trial_id}</div>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(run.status)}`}>
-              {run.status ? run.status.charAt(0).toUpperCase() + run.status.slice(1) : 'Unknown'}
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(run.run_status)}`}>
+              {/* {run.status ? run.status.charAt(0).toUpperCase() + run.status.slice(1) : 'Unknown'} */}
+              {run.run_status}
             </span>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 leading-tight">{run.trial_name}</h3>

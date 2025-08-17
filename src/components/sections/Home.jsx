@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, FileText, RefreshCw } from 'lucide-react';
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
@@ -13,6 +13,11 @@ export default function HomePage({ addLog }) {
   const [selectedRun, setSelectedRun] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
+  const [currentProcessStage, setCurrentProcessStage] = useState(0);  
+  const [mqttConnected, setMqttConnected] = useState(false); // Add MQTT connection state
+  const [activeTests, setActiveTests] = useState(new Map()); // Track active tests and their current stages
+  const hasFetchedRuns = useRef(false); // Track if runs have been fetched
+  
   const [processStages] = useState([
     'Sample Preparation',
     'Dissolution', 
@@ -22,13 +27,31 @@ export default function HomePage({ addLog }) {
     'Color Agent Addition',
     'Data Analysis',
   ]);
-  const [currentProcessStage, setCurrentProcessStage] = useState(0);
 
-  
-  const [mqttConnected, setMqttConnected] = useState(false); // Add MQTT connection state
-  
-  const [activeTests, setActiveTests] = useState(new Map()); // Track active tests and their current stages
+  // Function to update run status in database
+  const updateRunStatus = async (testId, run_status, run_stage) => {
+    try {
+      const response = await fetch(`http://localhost:5000/runs/${testId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ trial_id: testId, run_status: run_status, run_stage: parseInt(run_stage)}),
+      });
 
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      addLog && addLog(`Successfully updated run status for test ${testId} to: ${run_status}`);
+      return true;
+    } catch (error) {
+      console.error('Error updating run status:', error);
+      addLog && addLog(`Error updating run status for test ${testId}: ${error.message}`);
+      return false;
+    }
+  };
 
   ////////////////////////////////////////////////////////////////////////////////
   // Setup MQTT connection on component mount
@@ -49,21 +72,31 @@ export default function HomePage({ addLog }) {
   // Separate useEffect for setting up stage update callback
   useEffect(() => {
     // Set up stage update callback
-    mqttService.setStageUpdateCallback((testId, stage) => {
-      addLog && addLog(`Stage update received: Test ${testId}, Stage ${stage}`);
+    mqttService.setStageUpdateCallback(async (data) => {
+  
+      const testId = data.testId;
+      const run_status = data.run_status;
+      const run_stage = data.run_stage;
+
+      addLog && addLog(`Stage update received: Test ${testId}, Status ${run_status}, Stage ${run_stage}`);
+
+      // status can be "started", "stage_completed", "completed", "already_running", "stopped"
       
-      if (stage === 'completed') { //when test is fully completed
+      if (run_status === 'completed') { //when test is fully completed
         setActiveTests(prev => {
           const newMap = new Map(prev);
           newMap.delete(testId);
           return newMap;
         });
         
+        // Update run status in database
+        await updateRunStatus(testId, run_status, run_stage);
+        
         // Update runs status
         setRuns(prevRuns => 
           prevRuns.map(run => 
             run.trial_id === testId 
-              ? { ...run, status: 'completed' }
+              ? { ...run, run_status: run_status }
               : run
           )
         );
@@ -73,8 +106,32 @@ export default function HomePage({ addLog }) {
           setCurrentProcessStage(processStages.length);
         }
       } 
+      else if (run_status === 'failed' || run_status === 'error') { //when test fails
+        setActiveTests(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(testId);
+          return newMap;
+        });
+        
+        // Update run status in database
+        await updateRunStatus(testId, run_status, run_stage);
+
+        // Update runs status
+        setRuns(prevRuns => 
+          prevRuns.map(run => 
+            run.trial_id === testId 
+              ? { ...run, run_status: run_status }
+              : run
+          )
+        );
+        
+        // If this test is currently being viewed, update modal
+        if (selectedRun && selectedRun.trial_id === testId && showProcessModal) {
+          setCurrentProcessStage(parseInt(run_stage)); // Indicate error state
+        }
+      }
       else { // When a stage from current test is completed
-        const stageNumber = parseInt(stage);
+        const stageNumber = parseInt(run_stage);
         setActiveTests(prev => {
           const newMap = new Map(prev);
           newMap.set(testId, {
@@ -83,12 +140,15 @@ export default function HomePage({ addLog }) {
           });
           return newMap;
         });
-        
+
+        console.log(`updating stage to ${run_stage} for test id =${testId}`)
+        await updateRunStatus(testId, run_status, run_stage);
+
         // Update runs status to running
         setRuns(prevRuns => 
           prevRuns.map(run => 
             run.trial_id === testId 
-              ? { ...run, status: 'running' }
+              ? { ...run, run_status: run_status }
               : run
           )
         );
@@ -99,11 +159,10 @@ export default function HomePage({ addLog }) {
         }
       }
     });
-  }, [selectedRun, showProcessModal, processStages.length, addLog]);
+  }, [selectedRun, showProcessModal, processStages.length, addLog, updateRunStatus]);
 
 
   const fetchRuns = useCallback(async () => {
-    setLoading(true);
     setError(null);
     
     try {
@@ -115,10 +174,7 @@ export default function HomePage({ addLog }) {
       
       const data = await response.json();
       setRuns(data);
-      // Use a ref or move addLog call outside the callback to avoid dependency
-      if (addLog) {
-        addLog(`Successfully fetched ${data.length} test runs from API`);
-      }
+      
     } catch (error) {
       console.error('Error fetching runs:', error);
       setError(error.message);
@@ -133,19 +189,35 @@ export default function HomePage({ addLog }) {
   }, []); // Remove addLog dependency to prevent re-creation
 
   useEffect(() => {
-    fetchRuns();
+    // Only fetch runs if not already fetched
+    if (!hasFetchedRuns.current) {
+      fetchRuns();
+      hasFetchedRuns.current = true;
+    }
   }, [fetchRuns]);
 
   const handleView = (run) => {
     addLog && addLog(`Viewing run: ${run.trial_name} (${run.trial_id})`);
+    console.log('Selected run:', run);
     setSelectedRun(run);
     setShowDetailsModal(true);
   };
 
   // Updated handleRerun to send MQTT command
-  const handleRerun = (run) => {
+  const handleRerun = async (run) => {
     addLog && addLog(`Rerunning test: ${run.trial_name} (${run.trial_id})`);
-    
+
+    // // Immediately update UI state to show "started" status
+    // setRuns(prevRuns => 
+    //   prevRuns.map(prevRun => 
+    //     prevRun.trial_id === run.trial_id 
+    //       ? { ...prevRun, run_status: 'started' }
+    //       : prevRun
+    //   )
+    // );s
+
+    // // Update run status to 'started' in database (stage 0 = starting)
+    // await updateRunStatus(run.trial_id, 'started', 0);
    
     if (mqttConnected) {
       const success = mqttService.sendStartCommand(run.trial_id);  // Send start command to RPI via MQTT
@@ -153,9 +225,11 @@ export default function HomePage({ addLog }) {
         addLog && addLog(`Sent start command to RPI for test: ${run.trial_id}`);
       } else {
         addLog && addLog(`Failed to send start command`);
+        
       }
     } else {
       addLog && addLog(`Cannot start test - MQTT not connected`);
+      
     }
   };
 
@@ -172,7 +246,7 @@ export default function HomePage({ addLog }) {
       setCurrentProcessStage(activeTestData.currentStage);
     } else {
       // Simulate process stage based on run status
-      switch (run.status?.toLowerCase()) {
+      switch (run.run_status?.toLowerCase()) {
         case 'completed':
           setCurrentProcessStage(processStages.length); // All stages completed
           break;
@@ -247,7 +321,7 @@ export default function HomePage({ addLog }) {
         </span>
         {mqttConnected && (
           <span className="ml-4 text-xs text-green-600">
-            Ready to communicate with RPI
+            Device ready
           </span>
         )}
         {activeTests.size > 0 && (

@@ -7,7 +7,7 @@ import ssl
 from datetime import datetime
 
 # MQTT Configuration
-BROKER = "7c6925a110aa44f98ccf36d0b612fc93.s1.eu.hivemq.cloud"
+BROKER = "80d2a224a0dd4688ae06becbed2f32df.s1.eu.hivemq.cloud"
 PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
@@ -40,15 +40,18 @@ def simulate_test_process(test_id):
     
     log_message(f"Starting test process stage for {test_id}")
     
-    try:
-        # Send test started confirmation
-        response = {
-            "status": "started",
+    response = {
             "testId": test_id,
+            "run_status": "started",
+            "run_stage": 0,
             "timestamp": datetime.now().isoformat()
-        }
-        client.publish(TEST_SUB_TOPIC, json.dumps(response))
-        log_message(f"Sent 'started' status for test {test_id}")
+    }
+
+    try:
+        # # Send test started confirmation
+        
+        # client.publish(TEST_SUB_TOPIC, json.dumps(response))
+        #log_message(f"Sent 'started' status for test {test_id}")
         
         # Simulate each stage
         for stage_index, stage_name in enumerate(PROCESS_STAGES):
@@ -66,24 +69,20 @@ def simulate_test_process(test_id):
                 log_message(f"Test {test_id} was stopped during {stage_name}")
                 return
             
-            # Send stage completion
-            stage_response = {
-                "status": "stage_completed",
-                "testId": test_id,
-                "stage": stage_index + 1,
-                "timestamp": datetime.now().isoformat()
-            }
-            client.publish(TEST_SUB_TOPIC, json.dumps(stage_response))
+            response['run_status'] = "running"
+            response['run_stage'] = stage_index + 1
+            response['timestamp'] = datetime.now().isoformat()
+
+
+            client.publish(TEST_SUB_TOPIC, json.dumps(response))
             log_message(f"Test {test_id} - Stage {stage_index + 1} ({stage_name}) completed")
         
         # Send test completion
-        completion_response = {
-            "status": "completed",
-            "testId": test_id,
-            "totalStages": len(PROCESS_STAGES),
-            "timestamp": datetime.now().isoformat()
-        }
-        client.publish(TEST_SUB_TOPIC, json.dumps(completion_response))
+        response['run_status'] = "completed"
+        response['run_stage'] = len(PROCESS_STAGES)
+        response['timestamp'] = datetime.now().isoformat()
+
+        client.publish(TEST_SUB_TOPIC, json.dumps(response))
         log_message(f"Test {test_id} completed successfully!")
         
         # Remove from active tests
@@ -95,8 +94,8 @@ def simulate_test_process(test_id):
         
         # Send error response
         error_response = {
-            "status": "error",
             "testId": test_id,
+            "run_status": "error",
             "message": str(e),
             "timestamp": datetime.now().isoformat()
         }
@@ -166,8 +165,8 @@ def on_message(client, userdata, msg):
                     log_message(f"Test {test_id} is already running")
                     
                     response = {
-                        "status": "already_running",
                         "testId": test_id,
+                        "run_status": "already_running",
                     }
                     client.publish(TEST_SUB_TOPIC, json.dumps(response))
                 else:
@@ -193,8 +192,8 @@ def on_message(client, userdata, msg):
                     
                     # Send stopped response
                     response = {
-                        "status": "stopped",
                         "testId": test_id,
+                        "run_status": "stopped",
                         "message": "Test stopped by user"
                     }
                     client.publish(TEST_SUB_TOPIC, json.dumps(response))

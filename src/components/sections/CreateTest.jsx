@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, FileText, Hash, RotateCcw, Send } from 'lucide-react';
 import ProcessModal from '../ui/ProcessModal';
+import mqttService from '../../mqtt/mqttservice';
 
 export default function CreatePage({ addLog, setActivePage }) {
   const [formData, setFormData] = useState({
@@ -14,16 +15,50 @@ export default function CreatePage({ addLog, setActivePage }) {
   const [errors, setErrors] = useState({});
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [currentProcessStage, setCurrentProcessStage] = useState(0);
+  const [mqttConnected, setMqttConnected] = useState(false);
 
   const processStages = [
-    'initializing',
-    'dissolving',
-    'filtrating',
-    'diluting',
-    'dyeing',
-    'analyzing',
-    'preparing results'
+    'Sample Preparation',
+    'Dissolution', 
+    'Filtration',
+    'Dilution',
+    'Sampling',
+    'Color Agent Addition',
+    'Data Analysis',
   ];
+
+  // Setup MQTT connection on component mount
+  useEffect(() => {
+    console.log('Setting up MQTT connection to HiveMQ Cloud...');
+    mqttService.connect(); 
+    const checkConnection = () => {
+      setMqttConnected(mqttService.isConnected);
+    };
+    const interval = setInterval(checkConnection, 1000);
+    
+    return () => {
+      clearInterval(interval);
+      mqttService.disconnect();
+    };
+  }, []); // Empty dependency array - run only once on mount
+
+  // Setup MQTT stage update callback
+  useEffect(() => {
+    mqttService.setStageUpdateCallback((testId, stage) => {
+      addLog && addLog(`Stage update received: Test ${testId}, Stage ${stage}`);
+      
+      if (stage === 'completed') {
+        // Test fully completed
+        setCurrentProcessStage(processStages.length);
+        addLog && addLog(`Test ${testId} completed successfully!`);
+      } else {
+        // Stage completed
+        const stageNumber = parseInt(stage);
+        setCurrentProcessStage(stageNumber);
+        addLog && addLog(`Test ${testId} - Stage ${stageNumber} completed: ${processStages[stageNumber - 1] || 'Unknown'}`);
+      }
+    });
+  }, [processStages, addLog]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -68,23 +103,6 @@ export default function CreatePage({ addLog, setActivePage }) {
       }));
     }
   };
-  
-  const simulateProcessStages = async () => {
-    addLog && addLog('Starting process simulation...');
-
-    // Simulate each stage with delays
-    for (let i = 0; i < processStages.length; i++) {
-      setCurrentProcessStage(i); // Set current running stage
-      addLog && addLog(`Stage ${i + 1} started: ${processStages[i]}`);
-      
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay for each stage
-      
-      setCurrentProcessStage(i + 1); // Mark stage as completed
-      addLog && addLog(`Stage ${i + 1} completed: ${processStages[i]}`);
-    }
-    
-    addLog && addLog('All stages completed successfully!');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,14 +114,7 @@ export default function CreatePage({ addLog, setActivePage }) {
 
     setIsSubmitting(true);
     
-    // Show the process modal immediately when Create Test is clicked
-    setShowProcessModal(true);
-    setCurrentProcessStage(0);
-    
     try {
-      // Start the process simulation
-      await simulateProcessStages();
-
       const response = await fetch('http://localhost:5000/runs', {
         method: 'POST',
         headers: {
@@ -120,9 +131,26 @@ export default function CreatePage({ addLog, setActivePage }) {
 
       if (response.ok) {
         const result = await response.json();
-        addLog && addLog(`Test created successfully: ${formData.trialName} (ID: ${result.id || 'N/A'})`);
+        addLog && addLog(`Test created successfully: ${formData.trial_name} (ID: ${result.trial_id || 'N/A'})`);
         
-        // Navigate to Home page after process completes
+        // Send start command via MQTT if connected
+        if (mqttConnected && result.trial_id) {
+          // Show the process modal when starting the test
+          setShowProcessModal(true);
+          setCurrentProcessStage(0);
+
+          const success = mqttService.sendStartCommand(result.trial_id);
+          if (success) {
+            addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}`);
+          } else {
+            addLog && addLog(`Failed to send start command`);
+            setShowProcessModal(false);
+          }
+        } else if (!mqttConnected) {
+          addLog && addLog(`Cannot start test - MQTT not connected`);
+        }
+        
+        // Navigate to Home page after test creation
         setActivePage && setActivePage('home');
         addLog && addLog('Redirected to Home page.');
         
@@ -158,6 +186,24 @@ export default function CreatePage({ addLog, setActivePage }) {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Create New Test</h1>
+      </div>
+
+      {/* MQTT Connection Status */}
+      <div className="mb-4 p-3 rounded-lg flex items-center bg-gray-50">
+        <div className={`w-3 h-3 rounded-full mr-2 ${mqttConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+        <span className="text-sm text-gray-600">
+          MQTT: {mqttConnected ? 'Connected' : 'Disconnected'}
+        </span>
+        {mqttConnected && (
+          <span className="ml-4 text-xs text-green-600">
+            Device ready
+          </span>
+        )}
+        {!mqttConnected && (
+          <span className="ml-4 text-xs text-red-600">
+            Test will be created but not started automatically
+          </span>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
@@ -310,7 +356,7 @@ export default function CreatePage({ addLog, setActivePage }) {
         }}
         currentStage={currentProcessStage}
         stages={processStages}
-        title="Creating Test"
+        title="Test Progress"
       />
     </div>
   );

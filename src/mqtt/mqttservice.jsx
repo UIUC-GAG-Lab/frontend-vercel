@@ -7,7 +7,7 @@ class MQTTService {
         // Updated topics to match RPI script
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
-        this.MQTT_BROKER_URL = '7c6925a110aa44f98ccf36d0b612fc93.s1.eu.hivemq.cloud'
+        this.MQTT_BROKER_URL = '80d2a224a0dd4688ae06becbed2f32df.s1.eu.hivemq.cloud'
         this.MQTT_USERNAME = "ur2gglab";
         this.MQTT_PASSWORD = "Ur2gglab";
         
@@ -85,26 +85,12 @@ class MQTTService {
         if (topic === this.TEST_SUB_TOPIC) {
             // Process the test response message from RPI
             try{
-                const data = JSON.parse(message);
-                // status can be "started", "stage_completed", "completed", or "already_running", "stopped"
+                const result_from_rpi = JSON.parse(message);
+                // status can be "started", "stage_completed", "completed", "already_running", "stopped"
                 
-                
-                // // Handle different response types
-                if (data.status === "stage_completed") {
-                    // Notify the Home component about stage update
-                    if (this.stageUpdateCallback) {
-                        this.stageUpdateCallback(data.testId, data.stage);
-                    }
-                } else if (data.status === "completed") {
-
-                    // Notify completion
-                    if (this.stageUpdateCallback) {
-                        this.stageUpdateCallback(data.testId, 'completed');
-                    }
-                } else if (data.status === "error") {
-                    console.log(`Test ${data.testId} failed: ${data.message}`);
+                if(this.stageUpdateCallback) {
+                    this.stageUpdateCallback(result_from_rpi);
                 }
-
                 
             }catch(e){
                 console.log("Non-JSON message from RPI:", message);
