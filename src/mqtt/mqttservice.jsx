@@ -4,68 +4,104 @@ class MQTTService {
     constructor(){
         this.client = null;
         this.isConnected = false;
+        this.isConnecting = false; // connection state tracking
+        this.connectionPromise = null; // Track connection promise
+        
+        this.clientId = this.generateUniqueClientId();
+        
         // Updated topics to match RPI script
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
-        this.MQTT_BROKER_URL = '80d2a224a0dd4688ae06becbed2f32df.s1.eu.hivemq.cloud'
+        this.MQTT_BROKER_URL = '15587f0ec5124364bfb9be25e4e47026.s1.eu.hivemq.cloud'
         this.MQTT_USERNAME = "ur2gglab";
         this.MQTT_PASSWORD = "Ur2gglab";
         
         this.stageUpdateCallback = null; // callback for stage updates
     }
 
-    // creates client object and define its behavior
-    connect(brokerUrl = `wss://${this.MQTT_BROKER_URL}:8884/mqtt`, options = {}){
+    generateUniqueClientId() {
         
-        console.log("Attempting to connect to HiveMQ Cloud broker at:", brokerUrl);
+        let clientId = sessionStorage.getItem('mqtt_client_id');
+        if (!clientId) {
+            
+            const userAgent = navigator.userAgent.slice(-10);
+            const randomId = Math.random().toString(36).substring(2, 15);
+            clientId = `ur2_frontend_${userAgent}_${randomId}`;
+            sessionStorage.setItem('mqtt_client_id', clientId);
+        }
+        return clientId;
+    }
+
+    
+    async connect(brokerUrl = `wss://${this.MQTT_BROKER_URL}:8884/mqtt`, options = {}) {
+        // Return existing connection if already connected
+        if (this.isConnected && this.client) {
+            return this.client;
+        }
+
         
-         const defaultOptions = {
-            keepalive: 120,
-            clientId: `ur2_frontend_${Date.now()}`,  // Fixed: Different client ID
-            protocolId: 'MQTT',
-            protocolVersion: 4,
-            clean: true,
-            reconnectPeriod: 1000,
-            connectTimeout: 30 * 1000,
-            username: this.MQTT_USERNAME,
-            password: this.MQTT_PASSWORD, // Fixed password case
-            protocol: 'wss',
-            ...options
-        };
+        if (this.isConnecting && this.connectionPromise) {
+            console.log("🔄 Connection already in progress, waiting...");
+            return this.connectionPromise;
+        }
 
+        this.isConnecting = true;
+        
+   
+        
+        this.connectionPromise = new Promise((resolve, reject) => {
+            const defaultOptions = {
+                keepalive: 120,
+                clientId: this.clientId, 
+                protocolId: 'MQTT',
+                protocolVersion: 4,
+                clean: false,
+                reconnectPeriod: 1000,
+                connectTimeout: 30 * 1000,
+                username: this.MQTT_USERNAME,
+                password: this.MQTT_PASSWORD,
+                protocol: 'wss',
+                ...options
+            };
 
-        this.client = mqtt.connect(brokerUrl, defaultOptions);
+            this.client = mqtt.connect(brokerUrl, defaultOptions);
 
-        this.client.on('connect', () => {
-            console.log("✅ Connected to HiveMQ Cloud broker");
-            this.isConnected = true;
-            this.subscribeToTopics();
+            this.client.on('connect', () => {
+                console.log("✅ Connected to HiveMQ Cloud broker");
+                this.isConnected = true;
+                this.isConnecting = false;
+                this.subscribeToTopics();
+                resolve(this.client);
+            });
+
+            this.client.on('error', (error) => {
+                console.error("❌ MQTT connection error:", error);
+                this.isConnected = false;
+                this.isConnecting = false;
+                reject(error);
+            });
+
+            this.client.on("offline", () => {
+                console.warn("📡 MQTT client is offline");
+                this.isConnected = false;
+            });
+
+            this.client.on("message", (topic, message) => {
+                this.handleMessage(topic, message.toString());
+            });
+
+            this.client.on('reconnect', () => {
+                console.log("🔄 Reconnecting to HiveMQ...");
+            });
+
+            this.client.on('close', () => {
+                console.log("🔌 MQTT connection closed");
+                this.isConnected = false;
+                this.isConnecting = false;
+            });
         });
 
-        this.client.on('error', (error) => {
-            console.error("❌ MQTT connection error:", error);
-            this.isConnected = false;
-        });
-
-        this.client.on("offline", () => {
-            console.warn("📡 MQTT client is offline");
-            this.isConnected = false;
-        });
-
-        this.client.on("message", (topic, message) => {
-            this.handleMessage(topic, message.toString());
-        });
-
-        this.client.on('reconnect', () => {
-            console.log("🔄 Reconnecting to HiveMQ...");
-        });
-
-        this.client.on('close', () => {
-            console.log("🔌 MQTT connection closed");
-            this.isConnected = false;
-        });
-
-        return this.client;
+        return this.connectionPromise;
     }
 
     subscribeToTopics(){
@@ -134,8 +170,12 @@ class MQTTService {
             this.client.end(() => {
                 console.log("🔌 Disconnected from HiveMQ Cloud broker");
                 this.isConnected = false;
+                this.isConnecting = false;
+                this.connectionPromise = null;
             });
         }
+        // Clear client ID from session storage on explicit disconnect
+        sessionStorage.removeItem('mqtt_client_id');
     }
 }
 

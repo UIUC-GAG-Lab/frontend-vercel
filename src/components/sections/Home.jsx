@@ -6,7 +6,7 @@ import ProcessModal from '../ui/ProcessModal';
 
 import mqttService from '../../mqtt/mqttservice';
 
-export default function HomePage({ addLog }) {
+export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +14,7 @@ export default function HomePage({ addLog }) {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [currentProcessStage, setCurrentProcessStage] = useState(0);  
-  const [mqttConnected, setMqttConnected] = useState(false); // Add MQTT connection state
+  const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false); // Use prop or default
   const [activeTests, setActiveTests] = useState(new Map()); // Track active tests and their current stages
   const hasFetchedRuns = useRef(false); // Track if runs have been fetched
   
@@ -54,10 +54,13 @@ export default function HomePage({ addLog }) {
   };
 
   ////////////////////////////////////////////////////////////////////////////////
-  // Setup MQTT connection on component mount
+  // Update MQTT connection status when prop changes
   useEffect(() => {
-    console.log('Setting up MQTT connection to HiveMQ Cloud...');
-    mqttService.connect(); 
+    setMqttConnected(mqttConnectedProp || false);
+  }, [mqttConnectedProp]);
+
+  // Check connection status periodically (as backup)
+  useEffect(() => {
     const checkConnection = () => {
       setMqttConnected(mqttService.isConnected);
     };
@@ -65,9 +68,8 @@ export default function HomePage({ addLog }) {
     
     return () => {
       clearInterval(interval);
-      mqttService.disconnect();
     };
-  }, []); // Empty dependency array - run only once on mount !imp
+  }, []);
 ////////////////////////////////////////////////////////////////////////////////
   // Separate useEffect for setting up stage update callback
   useEffect(() => {

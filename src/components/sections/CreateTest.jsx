@@ -3,7 +3,7 @@ import { User, FileText, Hash, RotateCcw, Send } from 'lucide-react';
 import ProcessModal from '../ui/ProcessModal';
 import mqttService from '../../mqtt/mqttservice';
 
-export default function CreatePage({ addLog, setActivePage }) {
+export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttConnectedProp }) {
   const [formData, setFormData] = useState({
     trialName: '',
     userName: '',
@@ -15,7 +15,7 @@ export default function CreatePage({ addLog, setActivePage }) {
   const [errors, setErrors] = useState({});
   const [showProcessModal, setShowProcessModal] = useState(false);
   const [currentProcessStage, setCurrentProcessStage] = useState(0);
-  const [mqttConnected, setMqttConnected] = useState(false);
+  const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false);
 
   const processStages = [
     'Sample Preparation',
@@ -27,10 +27,13 @@ export default function CreatePage({ addLog, setActivePage }) {
     'Data Analysis',
   ];
 
-  // Setup MQTT connection on component mount
+  // Update MQTT connection status when prop changes
   useEffect(() => {
-    console.log('Setting up MQTT connection to HiveMQ Cloud...');
-    mqttService.connect(); 
+    setMqttConnected(mqttConnectedProp || false);
+  }, [mqttConnectedProp]);
+
+  // Check connection status periodically (as backup)
+  useEffect(() => {
     const checkConnection = () => {
       setMqttConnected(mqttService.isConnected);
     };
@@ -38,9 +41,8 @@ export default function CreatePage({ addLog, setActivePage }) {
     
     return () => {
       clearInterval(interval);
-      mqttService.disconnect();
     };
-  }, []); // Empty dependency array - run only once on mount
+  }, []);
 
   // Setup MQTT stage update callback
   useEffect(() => {

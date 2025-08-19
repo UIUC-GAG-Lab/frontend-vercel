@@ -7,7 +7,7 @@ import ssl
 from datetime import datetime
 
 # MQTT Configuration
-BROKER = "80d2a224a0dd4688ae06becbed2f32df.s1.eu.hivemq.cloud"
+BROKER = "15587f0ec5124364bfb9be25e4e47026.s1.eu.hivemq.cloud"
 PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
@@ -217,13 +217,17 @@ def main():
     log_message(f"Listening on: {TEST_PUB_TOPIC}")
     log_message(f"Publishing to: {TEST_SUB_TOPIC}")
     
-    # Create MQTT client with unique client ID
-    import uuid
-    client_id = f"ur2-rpi-simulator-{uuid.uuid4().hex[:8]}"
+    # Create a more stable client ID based on machine info
+    import platform
+    import hashlib
+    
+    machine_info = f"{platform.node()}-{platform.system()}"
+    client_id_hash = hashlib.md5(machine_info.encode()).hexdigest()[:8]
+    client_id = f"ur2-rpi-{client_id_hash}"
     log_message(f"Client ID: {client_id}")
     
     
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id, clean_session=True)
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id=client_id, clean_session=False)  # Changed to False
     client.username_pw_set(USERNAME, PASSWORD)
     
     

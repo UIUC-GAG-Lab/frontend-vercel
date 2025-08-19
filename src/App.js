@@ -1,15 +1,42 @@
 // App.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/dashboard/Sidebar';
-
 import MainView from './components/dashboard/MainView';
 import Console from './components/dashboard/Console';
+import mqttService from './mqtt/mqttservice'; // Import the service
 
 export default function App() {
   const [activePage, setActivePage] = useState('home'); 
   const [logs, setLogs] = useState([]);
+  const [mqttConnected, setMqttConnected] = useState(false);
 
   const addLog = (log) => setLogs((prev) => [...prev, log]);
+
+  // Initialize MQTT connection once at app level
+  useEffect(() => {
+    const initializeMQTT = async () => {
+      try {
+        await mqttService.connect(); //lets wait until i get promise
+        addLog('MQTT connection established');
+      } catch (error) {
+        addLog(`MQTT connection failed: ${error.message}`);
+      }
+    };
+
+    initializeMQTT();
+
+    // Check connection status periodically
+    const checkConnection = () => {
+      setMqttConnected(mqttService.isConnected);
+    };
+    
+    const interval = setInterval(checkConnection, 1000);
+    
+    return () => {
+      clearInterval(interval);
+      // Don't disconnect here - let it persist
+    };
+  }, []);
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -35,6 +62,7 @@ export default function App() {
               activePage={activePage}
               setActivePage={setActivePage}
               addLog={addLog}
+              mqttConnected={mqttConnected}
             />
           </div>
           
