@@ -7,7 +7,7 @@ import ssl
 from datetime import datetime
 
 # MQTT Configuration
-BROKER = "15587f0ec5124364bfb9be25e4e47026.s1.eu.hivemq.cloud"
+BROKER = "176e987427a34f88a1bca6c413a83953.s1.eu.hivemq.cloud"
 PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
@@ -18,13 +18,9 @@ TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
 
 # Test Stages (matching frontend)
 PROCESS_STAGES = [
-    'Sample Preparation',
-    'Dissolution', 
-    'Filtration',
-    'Dilution',
-    'Sampling',
-    'Color Agent Addition',
-    'Data Analysis'
+    'preparing sample',
+    'processing sample',
+    'preparing results'
 ]
 
 # Global variables

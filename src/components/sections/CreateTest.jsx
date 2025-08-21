@@ -18,13 +18,9 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
   const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false);
 
   const processStages = [
-    'Sample Preparation',
-    'Dissolution', 
-    'Filtration',
-    'Dilution',
-    'Sampling',
-    'Color Agent Addition',
-    'Data Analysis',
+    'preparing sample',
+    'processing sample',
+    'preparing results'
   ];
 
   // Update MQTT connection status when prop changes

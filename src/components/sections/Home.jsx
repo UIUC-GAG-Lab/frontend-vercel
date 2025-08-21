@@ -19,13 +19,9 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const hasFetchedRuns = useRef(false); // Track if runs have been fetched
   
   const [processStages] = useState([
-    'Sample Preparation',
-    'Dissolution', 
-    'Filtration',
-    'Dilution',
-    'Sampling',
-    'Color Agent Addition',
-    'Data Analysis',
+    'preparing sample',
+    'processing sample',
+    'preparing results'
   ]);
 
   // Function to update run status in database
@@ -253,10 +249,10 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
           setCurrentProcessStage(processStages.length); // All stages completed
           break;
         case 'running':
-          setCurrentProcessStage(3); // Currently in dissolution process
+          setCurrentProcessStage(2); // Currently processing sample
           break;
         case 'failed':
-          setCurrentProcessStage(2); // Failed during solution addition
+          setCurrentProcessStage(1); // Failed during sample preparation
           break;
         default:
           setCurrentProcessStage(0); // First stage is active

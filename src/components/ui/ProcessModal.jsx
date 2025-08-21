@@ -48,57 +48,59 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, title = "Process 
 
         {/* Process Steps - Horizontal Layout */}
         <div className="p-6">
-          <div className="flex items-center justify-between mb-8 overflow-x-auto">
-            {stages.map((stage, index) => {
-              const status = getStageStatus(index, currentStage);
-              const isLast = index === stages.length - 1;
+          <div className="flex items-center justify-center mb-8 overflow-x-auto">
+            <div className="flex items-center space-x-8">
+              {stages.map((stage, index) => {
+                const status = getStageStatus(index, currentStage);
+                const isLast = index === stages.length - 1;
 
-              return (
-                <div key={index} className="flex items-center flex-shrink-0">
-                  {/* Stage Item */}
-                  <div className="flex flex-col items-center text-center">
-                    {/* Icon Container */}
-                    <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      status === 'completed' ? 'bg-green-100 border-green-500' :
-                      status === 'running' ? 'bg-blue-100 border-blue-500' :
-                      'bg-gray-100 border-gray-300'
-                    }`}>
-                      {getStageIcon(index, currentStage)}
-                    </div>
-                    
-                    {/* Stage Info */}
-                    <div className="mt-3 max-w-20">
-                      <div className={`text-xs font-medium ${
-                        status === 'completed' ? 'text-green-600' :
-                        status === 'running' ? 'text-blue-600' :
-                        'text-gray-500'
+                return (
+                  <div key={index} className="flex items-center">
+                    {/* Stage Item */}
+                    <div className="flex flex-col items-center text-center">
+                      {/* Icon Container */}
+                      <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                        status === 'completed' ? 'bg-green-100 border-green-500' :
+                        status === 'running' ? 'bg-blue-100 border-blue-500' :
+                        'bg-gray-100 border-gray-300'
                       }`}>
-                        Stage {index + 1}
+                        {getStageIcon(index, currentStage)}
                       </div>
-                      <div className={`text-xs capitalize mt-1 ${
-                        status === 'completed' ? 'text-green-600' :
-                        status === 'running' ? 'text-blue-600' :
-                        'text-gray-500'
-                      }`}>
-                        {stage}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {status === 'completed' && 'Done'}
-                        {status === 'running' && 'Active'}
-                        {status === 'pending' && 'Waiting'}
+                      
+                      {/* Stage Info */}
+                      <div className="mt-3 w-24">
+                        <div className={`text-xs font-medium ${
+                          status === 'completed' ? 'text-green-600' :
+                          status === 'running' ? 'text-blue-600' :
+                          'text-gray-500'
+                        }`}>
+                          Stage {index + 1}
+                        </div>
+                        <div className={`text-xs capitalize mt-1 ${
+                          status === 'completed' ? 'text-green-600' :
+                          status === 'running' ? 'text-blue-600' :
+                          'text-gray-500'
+                        }`}>
+                          {stage}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {status === 'completed' && 'Done'}
+                          {status === 'running' && 'Active'}
+                          {status === 'pending' && 'Waiting'}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Connector Line */}
+                    {!isLast && (
+                      <div className="w-16 h-0.5 mx-6">
+                        <div className={`w-full h-full transition-all duration-300 ${getConnectorStyles(index, currentStage)}`}></div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Connector Line */}
-                  {!isLast && (
-                    <div className="flex-1 h-0.5 mx-4 min-w-8">
-                      <div className={`w-full h-full transition-all duration-300 ${getConnectorStyles(index, currentStage)}`}></div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* Progress Bar */}

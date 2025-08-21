@@ -12,7 +12,7 @@ class MQTTService {
         // Updated topics to match RPI script
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
-        this.MQTT_BROKER_URL = '15587f0ec5124364bfb9be25e4e47026.s1.eu.hivemq.cloud'
+        this.MQTT_BROKER_URL = '176e987427a34f88a1bca6c413a83953.s1.eu.hivemq.cloud'
         this.MQTT_USERNAME = "ur2gglab";
         this.MQTT_PASSWORD = "Ur2gglab";
         
