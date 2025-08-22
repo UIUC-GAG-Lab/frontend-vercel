@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { User, FileText, Hash, RotateCcw, Send } from 'lucide-react';
-import ProcessModal from '../ui/ProcessModal';
 import mqttService from '../../mqtt/mqttservice';
 
 export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttConnectedProp }) {
@@ -13,15 +12,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [showProcessModal, setShowProcessModal] = useState(false);
-  const [currentProcessStage, setCurrentProcessStage] = useState(0);
   const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false);
-
-  const processStages = [
-    'preparing sample',
-    'processing sample',
-    'preparing results'
-  ];
 
   // Update MQTT connection status when prop changes
   useEffect(() => {
@@ -40,23 +31,11 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
     };
   }, []);
 
-  // Setup MQTT stage update callback
+  // Setup MQTT callbacks (simplified for CreateTest)
   useEffect(() => {
-    mqttService.setStageUpdateCallback((testId, stage) => {
-      addLog && addLog(`Stage update received: Test ${testId}, Stage ${stage}`);
-      
-      if (stage === 'completed') {
-        // Test fully completed
-        setCurrentProcessStage(processStages.length);
-        addLog && addLog(`Test ${testId} completed successfully!`);
-      } else {
-        // Stage completed
-        const stageNumber = parseInt(stage);
-        setCurrentProcessStage(stageNumber);
-        addLog && addLog(`Test ${testId} - Stage ${stageNumber} completed: ${processStages[stageNumber - 1] || 'Unknown'}`);
-      }
-    });
-  }, [processStages, addLog]);
+    // We don't need to handle stage updates here anymore
+    // since the process modal is now in the dashboard
+  }, [addLog]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -133,25 +112,31 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
         
         // Send start command via MQTT if connected
         if (mqttConnected && result.trial_id) {
-          // Show the process modal when starting the test
-          setShowProcessModal(true);
-          setCurrentProcessStage(0);
-
           const success = mqttService.sendStartCommand(result.trial_id);
           if (success) {
             addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}`);
+            
+            // Navigate to dashboard and show process modal
+            setActivePage && setActivePage('home');
+            addLog && addLog('Redirected to Dashboard with active test process.');
+            
+            // Pass the test info to dashboard via a global state
+            window.activeTestInfo = {
+              testId: result.trial_id,
+              trialName: formData.trialName,
+              showProcessModal: true
+            };
           } else {
             addLog && addLog(`Failed to send start command`);
-            setShowProcessModal(false);
           }
         } else if (!mqttConnected) {
           addLog && addLog(`Cannot start test - MQTT not connected`);
+          // Still navigate to dashboard even if MQTT is not connected
+          setActivePage && setActivePage('home');
+          addLog && addLog('Redirected to Dashboard.');
         }
         
         // Navigate to Home page after test creation
-        setActivePage && setActivePage('home');
-        addLog && addLog('Redirected to Home page.');
-        
         handleReset();
       } else {
         const errorData = await response.json();
@@ -160,7 +145,6 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
     } catch (error) {
       console.error('Error submitting test:', error);
       addLog && addLog(`Error creating test: ${error.message}`);
-      setShowProcessModal(false); // Close modal on error
     } finally {
       setIsSubmitting(false);
     }
@@ -175,8 +159,6 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
       syringeFiltersSwapped: false
     });
     setErrors({});
-    setShowProcessModal(false);
-    setCurrentProcessStage(0);
     addLog && addLog('Form reset successfully');
   };
 
@@ -328,7 +310,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
             ) : (
               <>
                 <Send className="w-4 h-4 mr-2" />
-                Create Test
+                Run Test
               </>
             )}
           </button>
@@ -344,18 +326,6 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
           </button>
         </div>
       </form>
-
-      {/* Process Modal */}
-      <ProcessModal
-        isOpen={showProcessModal}
-        onClose={() => {
-          setShowProcessModal(false);
-          setCurrentProcessStage(0);
-        }}
-        currentStage={currentProcessStage}
-        stages={processStages}
-        title="Test Progress"
-      />
     </div>
   );
 }

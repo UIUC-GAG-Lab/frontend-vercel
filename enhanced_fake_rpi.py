@@ -7,7 +7,7 @@ import ssl
 from datetime import datetime
 
 # MQTT Configuration
-BROKER = "176e987427a34f88a1bca6c413a83953.s1.eu.hivemq.cloud"
+BROKER = "04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud"
 PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
@@ -15,70 +15,157 @@ PASSWORD = "Ur2gglab"
 # Topics
 TEST_PUB_TOPIC = 'ur2/test/init'  # Listen for commands from frontend
 TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
+CONFIRMATION_TOPIC = 'ur2/test/confirm'  # Handle user confirmations
 
-# Test Stages (matching frontend)
+# Test Stages (matching the new workflow)
 PROCESS_STAGES = [
-    'preparing sample',
-    'processing sample',
-    'preparing results'
+    'preparing sample',  # Run once: 200mL NaOH + heating pad
+    'processing sample',  # Run Script 2 → Script 3, repeat 5 times with user confirmation
+    'process complete'
 ]
 
 # Global variables
 client = None
 active_tests = {}
+user_confirmations = {}  # Store user confirmation responses
 
 def log_message(message):
     """Print timestamped log message"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
 
-def simulate_test_process(test_id):
+def run_script_1():
+    """Simulate running Script 1: Pump 200mL NaOH and keep heating pad on"""
+    log_message("Script 1: Pumping 200mL of NaOH...")
+    time.sleep(2)  # Simulate pumping time
+    log_message("Script 1: Turning on heating pad...")
+    time.sleep(1)  # Simulate heating pad activation
+    log_message("Script 1: Complete - Heating pad is now ON")
+
+def run_script_2():
+    """Simulate running Script 2"""
+    log_message("Script 2: Starting extraction process...")
+    time.sleep(1.5)  # Simulate script 2 execution
+    log_message("Script 2: Complete")
+
+def run_script_3():
+    """Simulate running Script 3"""
+    log_message("Script 3: Starting transformation and loading to cuvette...")
+    time.sleep(2)  # Simulate script 3 execution
+    log_message("Script 3: Complete")
+
+def wait_for_user_confirmation(test_id, cycle_number):
+    """Send confirmation request to frontend and wait for response"""
+    log_message(f"Test {test_id}: Requesting user confirmation after cycle {cycle_number}/5...")
     
-    log_message(f"Starting test process stage for {test_id}")
+    confirmation_request = {
+        "testId": test_id,
+        "run_status": "waiting_confirmation",
+        "message": f"Cycle {cycle_number}/5 completed. Continue with next cycle? Check if more NaOH is needed.",
+        "cycle": cycle_number,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    client.publish(TEST_SUB_TOPIC, json.dumps(confirmation_request))
+    
+    # Wait for user response
+    confirmation_key = f"{test_id}_confirmation"
+    user_confirmations[confirmation_key] = None
+    
+    # Wait up to 60 seconds for user response
+    wait_time = 0
+    while wait_time < 60:
+        if user_confirmations.get(confirmation_key) is not None:
+            response = user_confirmations[confirmation_key]
+            del user_confirmations[confirmation_key]  # Clean up
+            log_message(f"Test {test_id}: User {'confirmed' if response else 'declined'} to continue after cycle {cycle_number}")
+            return response
+        time.sleep(1)
+        wait_time += 1
+    
+    # Timeout - assume user wants to stop
+    log_message(f"Test {test_id}: No user response within 60 seconds after cycle {cycle_number} - stopping")
+    if confirmation_key in user_confirmations:
+        del user_confirmations[confirmation_key]
+    return False
+
+def simulate_test_process(test_id):
+    log_message(f"Starting test process for {test_id}")
     
     response = {
-            "testId": test_id,
-            "run_status": "started",
-            "run_stage": 0,
-            "timestamp": datetime.now().isoformat()
+        "testId": test_id,
+        "run_status": "started",
+        "run_stage": 0,
+        "timestamp": datetime.now().isoformat()
     }
 
     try:
-        # # Send test started confirmation
+        # Stage 1: Run Script 1 (once)
+        if test_id not in active_tests:
+            return
+            
+        log_message(f"Test {test_id} - Stage 1: Running Script 1")
+        run_script_1()
         
-        # client.publish(TEST_SUB_TOPIC, json.dumps(response))
-        #log_message(f"Sent 'started' status for test {test_id}")
+        response['run_status'] = "running"
+        response['run_stage'] = 1
+        response['timestamp'] = datetime.now().isoformat()
+        client.publish(TEST_SUB_TOPIC, json.dumps(response))
         
-        # Simulate each stage
-        for stage_index, stage_name in enumerate(PROCESS_STAGES):
+        # Stage 2: Run Script 2 & 3 (repeat 5 times with confirmation)
+        if test_id not in active_tests:
+            return
+            
+        log_message(f"Test {test_id} - Stage 2: Starting Script 2 & 3 cycles")
+        
+        for cycle in range(1, 6):  # 5 cycles
             if test_id not in active_tests:
-                log_message(f"Test {test_id} was stopped")
                 return
                 
-            log_message(f"Test {test_id} - Processing stage {stage_index + 1}: {stage_name}")
+            log_message(f"Test {test_id} - Cycle {cycle}/5")
             
-            # Add logic here to run differnt scripts based on the given stages.
-            stage_duration = 3 + (stage_index * 0.5)  # Varying duration
-            time.sleep(stage_duration)
+            # Run Script 2
+            run_script_2()
             
-            if test_id not in active_tests:
-                log_message(f"Test {test_id} was stopped during {stage_name}")
-                return
+            # Run Script 3
+            run_script_3()
             
-            response['run_status'] = "running"
-            response['run_stage'] = stage_index + 1
-            response['timestamp'] = datetime.now().isoformat()
-
-
-            client.publish(TEST_SUB_TOPIC, json.dumps(response))
-            log_message(f"Test {test_id} - Stage {stage_index + 1} ({stage_name}) completed")
+            # After each cycle, ask for user confirmation
+            if not wait_for_user_confirmation(test_id, cycle):
+                log_message(f"Test {test_id} - User chose to stop after cycle {cycle}")
+                
+                # Send stopped/failed status to frontend
+                stopped_response = {
+                    "testId": test_id,
+                    "run_status": "stopped_by_user",
+                    "message": f"Process stopped by user after cycle {cycle}/5",
+                    "run_stage": 2,  # We were in stage 2 (script 2 & 3)
+                    "timestamp": datetime.now().isoformat()
+                }
+                client.publish(TEST_SUB_TOPIC, json.dumps(stopped_response))
+                
+                # Remove from active tests
+                if test_id in active_tests:
+                    del active_tests[test_id]
+                return  # Exit if user chooses to stop
+        
+        response['run_status'] = "running"
+        response['run_stage'] = 2
+        response['timestamp'] = datetime.now().isoformat()
+        client.publish(TEST_SUB_TOPIC, json.dumps(response))
+        
+        # Stage 3: Process Complete
+        if test_id not in active_tests:
+            return
+            
+        log_message(f"Test {test_id} - All cycles completed")
         
         # Send test completion
         response['run_status'] = "completed"
         response['run_stage'] = len(PROCESS_STAGES)
         response['timestamp'] = datetime.now().isoformat()
-
         client.publish(TEST_SUB_TOPIC, json.dumps(response))
+        
         log_message(f"Test {test_id} completed successfully!")
         
         # Remove from active tests
@@ -107,7 +194,8 @@ def on_connect(client, userdata, flags, rc):
         log_message("Connected to HiveMQ Cloud broker successfully!")
         log_message(f"Session present: {flags['session present']}")
         client.subscribe(TEST_PUB_TOPIC)
-        log_message(f"📡 Subscribed to topic: {TEST_PUB_TOPIC}")
+        client.subscribe(CONFIRMATION_TOPIC)
+        log_message(f"📡 Subscribed to topics: {TEST_PUB_TOPIC}, {CONFIRMATION_TOPIC}")
     else:
         error_messages = {
             1: "Connection refused - incorrect protocol version",
@@ -203,6 +291,22 @@ def on_message(client, userdata, msg):
             log_message(f"Invalid JSON received: {message}")
         except Exception as e:
             log_message(f"Error processing message: {str(e)}")
+    
+    elif topic == CONFIRMATION_TOPIC:
+        try:
+            data = json.loads(message)
+            test_id = data.get("testId")
+            confirmed = data.get("confirmed", False)
+            
+            if test_id:
+                confirmation_key = f"{test_id}_confirmation"
+                user_confirmations[confirmation_key] = confirmed
+                log_message(f"Received user confirmation for test {test_id}: {'Yes' if confirmed else 'No'}")
+            
+        except json.JSONDecodeError:
+            log_message(f"Invalid JSON received on confirmation topic: {message}")
+        except Exception as e:
+            log_message(f"Error processing confirmation message: {str(e)}")
 
 def main():
     global client
@@ -212,6 +316,7 @@ def main():
     log_message(f"Username: {USERNAME}")
     log_message(f"Listening on: {TEST_PUB_TOPIC}")
     log_message(f"Publishing to: {TEST_SUB_TOPIC}")
+    log_message(f"Confirmation topic: {CONFIRMATION_TOPIC}")
     
     # Create a more stable client ID based on machine info
     import platform

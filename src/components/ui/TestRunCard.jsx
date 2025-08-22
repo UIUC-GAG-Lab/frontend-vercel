@@ -2,12 +2,31 @@ import React from 'react';
 import { Play, Eye, Clock, User, Calendar, Activity } from 'lucide-react';
 
 export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, currentStage }) {
+  const getStatusDisplay = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'stopped_by_user':
+        return 'Failed';
+      case 'completed':
+        return 'Completed';
+      case 'failed':
+        return 'Failed';
+      case 'running':
+        return 'Running';
+      case 'pending':
+        return 'Pending';
+      default:
+        return status || 'Unknown';
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'failed':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'stopped_by_user':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'running':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'pending':
@@ -43,8 +62,7 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
           <div className="flex justify-between items-center mb-1">
             <div className="text-sm text-gray-500">Trial_id: {run.trial_id}</div>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(run.run_status)}`}>
-              {/* {run.status ? run.status.charAt(0).toUpperCase() + run.status.slice(1) : 'Unknown'} */}
-              {run.run_status}
+              {getStatusDisplay(run.run_status)}
             </span>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 leading-tight">{run.trial_name}</h3>

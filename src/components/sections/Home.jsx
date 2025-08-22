@@ -3,6 +3,7 @@ import { Play, FileText, RefreshCw } from 'lucide-react';
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ProcessModal from '../ui/ProcessModal';
+import ConfirmationModal from '../ui/ConfirmationModal';
 
 import mqttService from '../../mqtt/mqttservice';
 
@@ -17,11 +18,14 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false); // Use prop or default
   const [activeTests, setActiveTests] = useState(new Map()); // Track active tests and their current stages
   const hasFetchedRuns = useRef(false); // Track if runs have been fetched
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [confirmationData, setConfirmationData] = useState(null);
+  const [activeTestId, setActiveTestId] = useState(null);
   
   const [processStages] = useState([
     'preparing sample',
-    'processing sample',
-    'preparing results'
+    'processing sample', 
+    'process complete'
   ]);
 
   // Function to update run status in database
@@ -78,7 +82,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
 
       addLog && addLog(`Stage update received: Test ${testId}, Status ${run_status}, Stage ${run_stage}`);
 
-      // status can be "started", "stage_completed", "completed", "already_running", "stopped"
+      // status can be "started", "running", "completed", "already_running", "stopped", "stopped_by_user", "waiting_confirmation"
       
       if (run_status === 'completed') { //when test is fully completed
         setActiveTests(prev => {
@@ -100,11 +104,11 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         );
         
         // If this test is currently being viewed, update modal
-        if (selectedRun && selectedRun.trial_id === testId && showProcessModal) {
+        if (activeTestId === testId && showProcessModal) {
           setCurrentProcessStage(processStages.length);
         }
       } 
-      else if (run_status === 'failed' || run_status === 'error') { //when test fails
+      else if (run_status === 'failed' || run_status === 'error' || run_status === 'stopped_by_user') { //when test fails or is stopped
         setActiveTests(prev => {
           const newMap = new Map(prev);
           newMap.delete(testId);
@@ -123,12 +127,18 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
           )
         );
         
-        // If this test is currently being viewed, update modal
-        if (selectedRun && selectedRun.trial_id === testId && showProcessModal) {
-          setCurrentProcessStage(parseInt(run_stage)); // Indicate error state
+        // If this test is currently being viewed, close the modal and show message
+        if (activeTestId === testId && showProcessModal) {
+          setShowProcessModal(false);
+          setActiveTestId(null);
+          if (run_status === 'stopped_by_user') {
+            addLog && addLog(`Test ${testId} was stopped by user during process`);
+          } else {
+            addLog && addLog(`Test ${testId} failed: ${data.message || 'Unknown error'}`);
+          }
         }
       }
-      else { // When a stage from current test is completed
+      else if (run_status === 'running') { // When a stage from current test is completed
         const stageNumber = parseInt(run_stage);
         setActiveTests(prev => {
           const newMap = new Map(prev);
@@ -146,18 +156,56 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         setRuns(prevRuns => 
           prevRuns.map(run => 
             run.trial_id === testId 
-              ? { ...run, run_status: run_status }
+              ? { ...run, run_status: run_status, run_stage: stageNumber }
               : run
           )
         );
         
         // If this test is currently being viewed, update modal
-        if (selectedRun && selectedRun.trial_id === testId && showProcessModal) {
+        if (activeTestId === testId && showProcessModal) {
           setCurrentProcessStage(stageNumber);
         }
       }
     });
-  }, [selectedRun, showProcessModal, processStages.length, addLog, updateRunStatus]);
+
+    // Setup confirmation callback
+    mqttService.setConfirmationCallback((result) => {
+      const { testId, message, cycle } = result;
+      setConfirmationData({ testId, message, cycle });
+      setShowConfirmationModal(true);
+      addLog && addLog(`Confirmation required for test ${testId}: ${message}`);
+    });
+  }, [activeTestId, showProcessModal, processStages.length, addLog]);
+
+  // Handle confirmation response
+  const handleConfirmation = (confirmed) => {
+    if (confirmationData && confirmationData.testId) {
+      mqttService.sendConfirmation(confirmationData.testId, confirmed);
+      
+      if (confirmed) {
+        addLog && addLog(`Sent confirmation for test ${confirmationData.testId}: Continue to next cycle`);
+      } else {
+        addLog && addLog(`Sent confirmation for test ${confirmationData.testId}: Stop process - User declined to continue`);
+        // The process modal will be closed when we receive the stopped_by_user status from backend
+      }
+    }
+    
+    setShowConfirmationModal(false);
+    setConfirmationData(null);
+  };
+
+  // Check for newly created test that should show process modal
+  useEffect(() => {
+    if (window.activeTestInfo && window.activeTestInfo.showProcessModal) {
+      setActiveTestId(window.activeTestInfo.testId);
+      setShowProcessModal(true);
+      setCurrentProcessStage(0);
+      addLog && addLog(`Showing process modal for newly created test: ${window.activeTestInfo.testId}`);
+      
+      // Clear the global state
+      window.activeTestInfo = null;
+    }
+  }, [addLog]);
 
 
   const fetchRuns = useCallback(async () => {
@@ -270,6 +318,8 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const handleCloseProcessModal = () => {
     setShowProcessModal(false);
     setSelectedRun(null);
+    setActiveTestId(null);
+    setCurrentProcessStage(0);
   };
 
   const handleRefresh = () => {
@@ -366,7 +416,17 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         onClose={handleCloseProcessModal}
         currentStage={currentProcessStage}
         stages={processStages}
-        title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : "Test Status"}
+        title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : activeTestId ? `Test Status - ${activeTestId}` : "Test Status"}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmationModal}
+        onConfirm={() => handleConfirmation(true)}
+        onCancel={() => handleConfirmation(false)}
+        testId={confirmationData?.testId}
+        message={confirmationData?.message}
+        cycle={confirmationData?.cycle}
       />
     </div>
   );

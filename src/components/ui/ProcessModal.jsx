@@ -48,6 +48,16 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, title = "Process 
 
         {/* Process Steps - Horizontal Layout */}
         <div className="p-6">
+          {/* Completion Message */}
+          {currentStage >= stages.length && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center">
+                <Check className="w-5 h-5 text-green-600 mr-2" />
+                <span className="text-green-800 font-medium">Process completed successfully!</span>
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-center mb-8 overflow-x-auto">
             <div className="flex items-center space-x-8">
               {stages.map((stage, index) => {
@@ -116,29 +126,7 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, title = "Process 
               ></div>
             </div>
           </div>
-
-          {/* Completion Message */}
-          {currentStage >= stages.length && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center">
-                <Check className="w-5 h-5 text-green-600 mr-2" />
-                <span className="text-green-800 font-medium">Process completed successfully!</span>
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Footer */}
-        {currentStage >= stages.length && (
-          <div className="px-6 pb-6">
-            <button
-              onClick={onClose}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
-            >
-              Close
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

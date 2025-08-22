@@ -12,11 +12,13 @@ class MQTTService {
         // Updated topics to match RPI script
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
-        this.MQTT_BROKER_URL = '176e987427a34f88a1bca6c413a83953.s1.eu.hivemq.cloud'
+        this.CONFIRMATION_TOPIC = 'ur2/test/confirm';
+        this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
         this.MQTT_USERNAME = "ur2gglab";
         this.MQTT_PASSWORD = "Ur2gglab";
         
         this.stageUpdateCallback = null; // callback for stage updates
+        this.confirmationCallback = null; // callback for confirmation requests
     }
 
     generateUniqueClientId() {
@@ -122,10 +124,18 @@ class MQTTService {
             // Process the test response message from RPI
             try{
                 const result_from_rpi = JSON.parse(message);
-                // status can be "started", "stage_completed", "completed", "already_running", "stopped"
+                // status can be "started", "running", "completed", "already_running", "stopped", "waiting_confirmation"
                 
-                if(this.stageUpdateCallback) {
-                    this.stageUpdateCallback(result_from_rpi);
+                if (result_from_rpi.run_status === "waiting_confirmation") {
+                    // Handle confirmation request
+                    if (this.confirmationCallback) {
+                        this.confirmationCallback(result_from_rpi);
+                    }
+                } else {
+                    // Handle normal stage updates
+                    if(this.stageUpdateCallback) {
+                        this.stageUpdateCallback(result_from_rpi);
+                    }
                 }
                 
             }catch(e){
@@ -160,9 +170,23 @@ class MQTTService {
         return this.publish(this.TEST_PUB_TOPIC, payload);
     }
 
+    sendConfirmation(testId, confirmed) {
+        const payload = JSON.stringify({
+            testId: testId,
+            confirmed: confirmed,
+            timestamp: new Date().toISOString()
+        });
+        return this.publish(this.CONFIRMATION_TOPIC, payload);
+    }
+
     // Set callback for stage updates
     setStageUpdateCallback(callback) {
         this.stageUpdateCallback = callback;
+    }
+
+    // Set callback for confirmation requests
+    setConfirmationCallback(callback) {
+        this.confirmationCallback = callback;
     }
 
     disconnect() {
