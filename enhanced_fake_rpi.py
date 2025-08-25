@@ -6,8 +6,37 @@ import uuid
 import ssl
 from datetime import datetime
 
+import subprocess
+import shlex
+import sys
+
+# --- config (direct, no env vars) ---
+PYTHON_BIN = sys.executable  # use same interpreter as main program
+
+SCRIPT_PY = {
+    "script_1": {
+        "path": "/opt/ur2/pump_200ml.py",
+        "args": ["--ml", "200"],
+        "timeout": 900,   # 15 min
+    },
+    "script_2": {
+        "path": "/opt/ur2/extract_cycle.py",
+        "args": [],
+        "timeout": 600,   # 10 min
+    },
+    "script_3": {
+        "path": "/opt/ur2/transform_and_load.py",
+        "args": [],
+        "timeout": 600,   # 10 min
+    },
+}
+
+
 # MQTT Configuration
-BROKER = "04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud"
+# prod URL
+# BROKER = "04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud"
+# testing url
+BROKER = "69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud"
 PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
@@ -29,29 +58,79 @@ client = None
 active_tests = {}
 user_confirmations = {}  # Store user confirmation responses
 
+###################################
+
+
 def log_message(message):
     """Print timestamped log message"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
 
+
+# --- helper to run python scripts ---
+def run_external_py(name: str):
+    cfg = SCRIPT_PY[name]
+    cmd = [PYTHON_BIN, cfg["path"], *cfg["args"]]
+
+    log_message(f"{name}: launching -> {cmd}")
+    try:
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=cfg["timeout"],
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        log_message(f"{name}: TIMEOUT after {cfg['timeout']}s")
+        raise
+    except FileNotFoundError:
+        log_message(f"{name}: file not found -> {cfg['path']}")
+        raise
+
+    if res.stdout:
+        log_message(f"{name} stdout:\n{res.stdout.strip()[-300:]}")
+    if res.stderr:
+        log_message(f"{name} stderr:\n{res.stderr.strip()[-300:]}")
+
+    if res.returncode != 0:
+        raise RuntimeError(f"{name} failed with code {res.returncode}")
+
+    log_message(f"{name}: finished successfully (code 0)")
+
+
+
+
 def run_script_1():
     """Simulate running Script 1: Pump 200mL NaOH and keep heating pad on"""
     log_message("Script 1: Pumping 200mL of NaOH...")
+    
     time.sleep(2)  # Simulate pumping time
     log_message("Script 1: Turning on heating pad...")
     time.sleep(1)  # Simulate heating pad activation
+
+    #run_external_py("script_1")  # Run the actual script
+
+
     log_message("Script 1: Complete - Heating pad is now ON")
 
 def run_script_2():
     """Simulate running Script 2"""
     log_message("Script 2: Starting extraction process...")
+    
     time.sleep(1.5)  # Simulate script 2 execution
     log_message("Script 2: Complete")
 
+    # run_external_py("script_2")  # Run the actual script
+
 def run_script_3():
     """Simulate running Script 3"""
+    
     log_message("Script 3: Starting transformation and loading to cuvette...")
     time.sleep(2)  # Simulate script 3 execution
+
+    #run_external_py("script_3")  # Run the actual script
+
     log_message("Script 3: Complete")
 
 def wait_for_user_confirmation(test_id, cycle_number):

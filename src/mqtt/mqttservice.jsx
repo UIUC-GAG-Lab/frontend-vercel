@@ -13,7 +13,12 @@ class MQTTService {
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
         this.CONFIRMATION_TOPIC = 'ur2/test/confirm';
-        this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
+        // prod url
+        // this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
+        
+        // testing url
+        this.MQTT_BROKER_URL = '69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud' 
+        
         this.MQTT_USERNAME = "ur2gglab";
         this.MQTT_PASSWORD = "Ur2gglab";
         

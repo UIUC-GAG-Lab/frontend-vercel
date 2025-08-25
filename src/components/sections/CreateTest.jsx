@@ -236,7 +236,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
           <div>
             <label htmlFor="sampleSize" className="block text-sm font-medium text-gray-700 mb-2">
               <Hash className="w-4 h-4 inline mr-1" />
-              Cement Sample Size (grams)
+              Sample Size (grams)
             </label>
             <input
               id="sampleSize"
@@ -268,7 +268,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
                   errors.cementAdded ? 'border-red-300' : ''
                 }`}
               />
-              <span className="ml-2 text-sm font-medium text-gray-700">Cement added? *</span>
+              <span className="ml-2 text-sm font-medium text-gray-700">Sample added? *</span>
             </label>
             {errors.cementAdded && (
               <p className="mt-1 text-sm text-red-600">{errors.cementAdded}</p>
