@@ -4,7 +4,6 @@ import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ProcessModal from '../ui/ProcessModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
-
 import mqttService from '../../mqtt/mqttservice';
 
 export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
@@ -21,11 +20,14 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [confirmationData, setConfirmationData] = useState(null);
   const [activeTestId, setActiveTestId] = useState(null);
+  const [currentCycle, setCurrentCycle] = useState(1);
   
   const [processStages] = useState([
     'preparing sample',
-    'processing sample', 
-    'process complete'
+    'dissolution',
+    'filteration', 
+    'dilution',
+    'color agent addition'
   ]);
 
   // Function to update run status in database
@@ -79,12 +81,20 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       const testId = data.testId;
       const run_status = data.run_status;
       const run_stage = data.run_stage;
+      const cycle = data.cycle;
 
-      addLog && addLog(`Stage update received: Test ${testId}, Status ${run_status}, Stage ${run_stage}`);
+      addLog && addLog(`Stage update received: Test ${testId}, Status ${run_status}, Stage ${run_stage}${cycle ? `, Cycle ${cycle}` : ''}`);
 
-      // status can be "started", "running", "completed", "already_running", "stopped", "stopped_by_user", "waiting_confirmation"
-      
-      if (run_status === 'completed') { //when test is fully completed
+      // Handle different status types
+      if (run_status === 'cycle_start') {
+        // Reset progress for stages 2-5 when a new cycle starts
+        if (activeTestId === testId && showProcessModal) {
+          setCurrentCycle(cycle);
+          setCurrentProcessStage(1); // Keep stage 1 completed, reset to start of cycle
+          addLog && addLog(`Starting cycle ${cycle}/5 - Resetting progress for stages 2-5`);
+        }
+      }
+      else if (run_status === 'completed') { //when test is fully completed
         setActiveTests(prev => {
           const newMap = new Map(prev);
           newMap.delete(testId);
@@ -106,6 +116,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         // If this test is currently being viewed, update modal
         if (activeTestId === testId && showProcessModal) {
           setCurrentProcessStage(processStages.length);
+          setCurrentCycle(null);
         }
       } 
       else if (run_status === 'failed' || run_status === 'error' || run_status === 'stopped_by_user') { //when test fails or is stopped
@@ -140,23 +151,30 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       }
       else if (run_status === 'running') { // When a stage from current test is completed
         const stageNumber = parseInt(run_stage);
+        
+        // Handle cycle information if provided
+        if (data.cycle) {
+          setCurrentCycle(data.cycle);
+        }
+        
         setActiveTests(prev => {
           const newMap = new Map(prev);
           newMap.set(testId, {
             currentStage: stageNumber,
+            cycle: data.cycle || 1,
             timestamp: new Date().toISOString()
           });
           return newMap;
         });
 
-        console.log(`updating stage to ${run_stage} for test id =${testId}`)
+        console.log(`updating stage to ${run_stage} (cycle ${data.cycle || 1}) for test id =${testId}`)
         await updateRunStatus(testId, run_status, run_stage);
 
         // Update runs status to running
         setRuns(prevRuns => 
           prevRuns.map(run => 
             run.trial_id === testId 
-              ? { ...run, run_status: run_status, run_stage: stageNumber }
+              ? { ...run, run_status: run_status, run_stage: stageNumber, cycle: data.cycle || 1 }
               : run
           )
         );
@@ -181,15 +199,12 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const handleConfirmation = (confirmed) => {
     if (confirmationData && confirmationData.testId) {
       mqttService.sendConfirmation(confirmationData.testId, confirmed);
-      
       if (confirmed) {
         addLog && addLog(`Sent confirmation for test ${confirmationData.testId}: Continue to next cycle`);
       } else {
         addLog && addLog(`Sent confirmation for test ${confirmationData.testId}: Stop process - User declined to continue`);
-        // The process modal will be closed when we receive the stopped_by_user status from backend
       }
     }
-    
     setShowConfirmationModal(false);
     setConfirmationData(null);
   };
@@ -415,6 +430,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         isOpen={showProcessModal}
         onClose={handleCloseProcessModal}
         currentStage={currentProcessStage}
+        currentCycle={currentCycle}
         stages={processStages}
         title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : activeTestId ? `Test Status - ${activeTestId}` : "Test Status"}
       />

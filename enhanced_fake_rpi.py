@@ -46,11 +46,13 @@ TEST_PUB_TOPIC = 'ur2/test/init'  # Listen for commands from frontend
 TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
 CONFIRMATION_TOPIC = 'ur2/test/confirm'  # Handle user confirmations
 
-# Test Stages (matching the new workflow)
+# Test Stages (7 stages workflow)
 PROCESS_STAGES = [
-    'preparing sample',  # Run once: 200mL NaOH + heating pad
-    'processing sample',  # Run Script 2 → Script 3, repeat 5 times with user confirmation
-    'process complete'
+    'preparing sample',
+    'dissolution', 
+    'filteration',
+    'dilution',
+    'color agent addition'
 ]
 
 # Global variables
@@ -102,7 +104,7 @@ def run_external_py(name: str):
 
 
 def run_script_1():
-    """Simulate running Script 1: Pump 200mL NaOH and keep heating pad on"""
+    """Run Script 1 ONCE: Pump 200mL NaOH and keep heating pad on - INDEPENDENT STAGE"""
     log_message("Script 1: Pumping 200mL of NaOH...")
     
     time.sleep(2)  # Simulate pumping time
@@ -112,10 +114,10 @@ def run_script_1():
     #run_external_py("script_1")  # Run the actual script
 
 
-    log_message("Script 1: Complete - Heating pad is now ON")
+    log_message("Script 1: COMPLETED PERMANENTLY - Heating pad is now ON")
 
 def run_script_2():
-    """Simulate running Script 2"""
+    """Run Script 2: Part of 5-cycle process - Extraction and processing"""
     log_message("Script 2: Starting extraction process...")
     
     time.sleep(1.5)  # Simulate script 2 execution
@@ -124,7 +126,7 @@ def run_script_2():
     # run_external_py("script_2")  # Run the actual script
 
 def run_script_3():
-    """Simulate running Script 3"""
+    """Run Script 3: Part of 5-cycle process - Transformation and loading to cuvette"""
     
     log_message("Script 3: Starting transformation and loading to cuvette...")
     time.sleep(2)  # Simulate script 3 execution
@@ -140,33 +142,30 @@ def wait_for_user_confirmation(test_id, cycle_number):
     confirmation_request = {
         "testId": test_id,
         "run_status": "waiting_confirmation",
-        "message": f"Cycle {cycle_number}/5 completed. Continue with next cycle? Check if more NaOH is needed.",
+        "message": f"Color agent addition - Cycle {cycle_number}/5 completed. Continue with next cycle? Check if more NaOH is needed.",
         "cycle": cycle_number,
         "timestamp": datetime.now().isoformat()
     }
     
     client.publish(TEST_SUB_TOPIC, json.dumps(confirmation_request))
     
-    # Wait for user response
+    # Wait for user response indefinitely
     confirmation_key = f"{test_id}_confirmation"
     user_confirmations[confirmation_key] = None
     
-    # Wait up to 60 seconds for user response
-    wait_time = 0
-    while wait_time < 60:
-        if user_confirmations.get(confirmation_key) is not None:
-            response = user_confirmations[confirmation_key]
-            del user_confirmations[confirmation_key]  # Clean up
-            log_message(f"Test {test_id}: User {'confirmed' if response else 'declined'} to continue after cycle {cycle_number}")
-            return response
-        time.sleep(1)
-        wait_time += 1
+    # Wait indefinitely for user response
+    while user_confirmations.get(confirmation_key) is None:
+        if test_id not in active_tests:
+            # Test was stopped, clean up and return False
+            if confirmation_key in user_confirmations:
+                del user_confirmations[confirmation_key]
+            return False
+        time.sleep(0.5)  # Check every 500ms
     
-    # Timeout - assume user wants to stop
-    log_message(f"Test {test_id}: No user response within 60 seconds after cycle {cycle_number} - stopping")
-    if confirmation_key in user_confirmations:
-        del user_confirmations[confirmation_key]
-    return False
+    response = user_confirmations[confirmation_key]
+    del user_confirmations[confirmation_key]  # Clean up
+    log_message(f"Test {test_id}: User {'confirmed' if response else 'declined'} to continue after cycle {cycle_number}")
+    return response
 
 def simulate_test_process(test_id):
     log_message(f"Starting test process for {test_id}")
@@ -179,35 +178,92 @@ def simulate_test_process(test_id):
     }
 
     try:
-        # Stage 1: Run Script 1 (once)
+        # Stage 1: Preparing Sample (Script 1) - Run ONCE ONLY
         if test_id not in active_tests:
             return
             
-        log_message(f"Test {test_id} - Stage 1: Running Script 1")
-        run_script_1()
+        log_message(f"Test {test_id} - Stage 1: Preparing Sample (Script 1)")
         
+        # Update to show stage 1 is starting
         response['run_status'] = "running"
         response['run_stage'] = 1
         response['timestamp'] = datetime.now().isoformat()
         client.publish(TEST_SUB_TOPIC, json.dumps(response))
         
-        # Stage 2: Run Script 2 & 3 (repeat 5 times with confirmation)
-        if test_id not in active_tests:
-            return
-            
-        log_message(f"Test {test_id} - Stage 2: Starting Script 2 & 3 cycles")
+        # Run Script 1 (independent, runs only once)
+        run_script_1()  # Pump 200mL NaOH + heating pad
         
+        log_message(f"Test {test_id} - Stage 1 (Preparing Sample) COMPLETED PERMANENTLY")
+        time.sleep(1)  # Brief pause to show completion
+        
+        # Stages 2-5: Cycle through Script 2 & 3 (5 times with confirmations)
         for cycle in range(1, 6):  # 5 cycles
             if test_id not in active_tests:
                 return
                 
-            log_message(f"Test {test_id} - Cycle {cycle}/5")
+            log_message(f"Test {test_id} - Starting Cycle {cycle}/5")
             
-            # Run Script 2
-            run_script_2()
+            # Send cycle start notification (resets stages 2-5 in UI)
+            cycle_response = {
+                "testId": test_id,
+                "run_status": "cycle_start",
+                "cycle": cycle,
+                "run_stage": 2,  # Reset to stage 2 for each cycle
+                "timestamp": datetime.now().isoformat()
+            }
+            client.publish(TEST_SUB_TOPIC, json.dumps(cycle_response))
             
-            # Run Script 3
-            run_script_3()
+            # Stage 2: Dissolution (part of Script 2)
+            if test_id not in active_tests:
+                return
+            log_message(f"Test {test_id} - Cycle {cycle}: Dissolution")
+            time.sleep(2)  # Simulate dissolution
+            
+            response['run_status'] = "running"
+            response['run_stage'] = 2
+            response['cycle'] = cycle
+            response['timestamp'] = datetime.now().isoformat()
+            client.publish(TEST_SUB_TOPIC, json.dumps(response))
+            
+            # Stage 3: Filteration (part of Script 2)
+            if test_id not in active_tests:
+                return
+            log_message(f"Test {test_id} - Cycle {cycle}: Filteration")
+            time.sleep(2)  # Simulate filteration
+            
+            response['run_status'] = "running"
+            response['run_stage'] = 3
+            response['cycle'] = cycle
+            response['timestamp'] = datetime.now().isoformat()
+            client.publish(TEST_SUB_TOPIC, json.dumps(response))
+            
+            # Stage 4: Dilution (part of Script 2)
+            if test_id not in active_tests:
+                return
+            log_message(f"Test {test_id} - Cycle {cycle}: Dilution")
+            time.sleep(2)  # Simulate dilution
+            run_script_2()  # Actually run script 2 here
+            
+            response['run_status'] = "running"
+            response['run_stage'] = 4
+            response['cycle'] = cycle
+            response['timestamp'] = datetime.now().isoformat()
+            client.publish(TEST_SUB_TOPIC, json.dumps(response))
+            
+            # Stage 5: Color Agent Addition (Script 3)
+            if test_id not in active_tests:
+                return
+            log_message(f"Test {test_id} - Cycle {cycle}: Color Agent Addition")
+            time.sleep(2)  # Simulate color agent addition
+            run_script_3()  # Actually run script 3 here
+            
+            response['run_status'] = "running"
+            response['run_stage'] = 5
+            response['cycle'] = cycle
+            response['timestamp'] = datetime.now().isoformat()
+            client.publish(TEST_SUB_TOPIC, json.dumps(response))
+            
+            log_message(f"Test {test_id} - Cycle {cycle}/5 completed")
             
             # After each cycle, ask for user confirmation
             if not wait_for_user_confirmation(test_id, cycle):
@@ -216,9 +272,10 @@ def simulate_test_process(test_id):
                 # Send stopped/failed status to frontend
                 stopped_response = {
                     "testId": test_id,
-                    "run_status": "stopped_by_user",
+                    "run_status": "failed",
                     "message": f"Process stopped by user after cycle {cycle}/5",
-                    "run_stage": 2,  # We were in stage 2 (script 2 & 3)
+                    "run_stage": 5,
+                    "cycle": cycle,
                     "timestamp": datetime.now().isoformat()
                 }
                 client.publish(TEST_SUB_TOPIC, json.dumps(stopped_response))
@@ -228,22 +285,32 @@ def simulate_test_process(test_id):
                     del active_tests[test_id]
                 return  # Exit if user chooses to stop
         
-        response['run_status'] = "running"
-        response['run_stage'] = 2
-        response['timestamp'] = datetime.now().isoformat()
-        client.publish(TEST_SUB_TOPIC, json.dumps(response))
-        
-        # Stage 3: Process Complete
+        # Stage 6: Data Analysis (final stage)
         if test_id not in active_tests:
             return
             
-        log_message(f"Test {test_id} - All cycles completed")
+        log_message(f"Test {test_id} - Stage 6: Data Analysis")
+        time.sleep(3)  # Simulate data analysis
+        
+        response['run_status'] = "running"
+        response['run_stage'] = 6
+        response['cycle'] = None  # No more cycles
+        response['timestamp'] = datetime.now().isoformat()
+        client.publish(TEST_SUB_TOPIC, json.dumps(response))
+        log_message(f"Test {test_id} - Stage 6 (Data Analysis) completed")
         
         # Send test completion
         response['run_status'] = "completed"
         response['run_stage'] = len(PROCESS_STAGES)
+        response['cycle'] = None
         response['timestamp'] = datetime.now().isoformat()
         client.publish(TEST_SUB_TOPIC, json.dumps(response))
+
+        log_message(f"Test {test_id} completed successfully!")
+        
+        # Remove from active tests
+        if test_id in active_tests:
+            del active_tests[test_id]
         
         log_message(f"Test {test_id} completed successfully!")
         
