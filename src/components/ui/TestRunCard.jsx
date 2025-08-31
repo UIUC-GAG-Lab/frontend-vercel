@@ -46,14 +46,14 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
       isActive ? 'border-blue-300 bg-blue-50' : 'border-gray-200'
     }`}>
       {/* Active Stage Indicator - Top */}
-      {isActive && (
+      {/* {isActive && (
         <div className="p-4 pb-0">
           <div className="flex items-center text-xs text-blue-600">
             <div className="w-2 h-2 bg-blue-500 rounded-full mr-1 animate-pulse"></div>
             Stage {currentStage}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Card Content */}
       <div className="p-4 pt-2">

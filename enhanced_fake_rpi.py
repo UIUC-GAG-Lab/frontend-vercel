@@ -120,7 +120,7 @@ def run_script_2():
     """Run Script 2: Part of 5-cycle process - Extraction and processing"""
     log_message("Script 2: Starting extraction process...")
     
-    time.sleep(1.5)  # Simulate script 2 execution
+    time.sleep(3)  # Simulate script 2 execution
     log_message("Script 2: Complete")
 
     # run_external_py("script_2")  # Run the actual script
@@ -194,10 +194,12 @@ def simulate_test_process(test_id):
         run_script_1()  # Pump 200mL NaOH + heating pad
         
         log_message(f"Test {test_id} - Stage 1 (Preparing Sample) COMPLETED PERMANENTLY")
-        time.sleep(1)  # Brief pause to show completion
+        
         
         # Stages 2-5: Cycle through Script 2 & 3 (5 times with confirmations)
-        for cycle in range(1, 6):  # 5 cycles
+        for cycle in range(1,6):  # 5 cycles
+            
+
             if test_id not in active_tests:
                 return
                 
@@ -213,53 +215,29 @@ def simulate_test_process(test_id):
             }
             client.publish(TEST_SUB_TOPIC, json.dumps(cycle_response))
             
-            # Stage 2: Dissolution (part of Script 2)
-            if test_id not in active_tests:
-                return
-            log_message(f"Test {test_id} - Cycle {cycle}: Dissolution")
-            time.sleep(2)  # Simulate dissolution
-            
-            response['run_status'] = "running"
-            response['run_stage'] = 2
+            ####
+
             response['cycle'] = cycle
-            response['timestamp'] = datetime.now().isoformat()
-            client.publish(TEST_SUB_TOPIC, json.dumps(response))
             
-            # Stage 3: Filteration (part of Script 2)
-            if test_id not in active_tests:
-                return
-            log_message(f"Test {test_id} - Cycle {cycle}: Filteration")
-            time.sleep(2)  # Simulate filteration
-            
-            response['run_status'] = "running"
-            response['run_stage'] = 3
-            response['cycle'] = cycle
-            response['timestamp'] = datetime.now().isoformat()
-            client.publish(TEST_SUB_TOPIC, json.dumps(response))
-            
-            # Stage 4: Dilution (part of Script 2)
-            if test_id not in active_tests:
-                return
-            log_message(f"Test {test_id} - Cycle {cycle}: Dilution")
-            time.sleep(2)  # Simulate dilution
             run_script_2()  # Actually run script 2 here
-            
-            response['run_status'] = "running"
-            response['run_stage'] = 4
-            response['cycle'] = cycle
-            response['timestamp'] = datetime.now().isoformat()
-            client.publish(TEST_SUB_TOPIC, json.dumps(response))
+            for run_stage, label in [
+                (2, "Dissolution"),
+                (3, "Filtration"), 
+                (4, "Dilution"),
+            ]:
+                if test_id not in active_tests:
+                    return
+                log_message(f"Test {test_id} - Cycle {cycle}: {label}")
+                time.sleep(1.5)
+                response.update(run_stage=run_stage, timestamp=datetime.now().isoformat())
+                client.publish(TEST_SUB_TOPIC, json.dumps(response))
             
             # Stage 5: Color Agent Addition (Script 3)
+            run_script_3()  # Actually run script 3 here
             if test_id not in active_tests:
                 return
             log_message(f"Test {test_id} - Cycle {cycle}: Color Agent Addition")
-            time.sleep(2)  # Simulate color agent addition
-            run_script_3()  # Actually run script 3 here
-            
-            response['run_status'] = "running"
             response['run_stage'] = 5
-            response['cycle'] = cycle
             response['timestamp'] = datetime.now().isoformat()
             client.publish(TEST_SUB_TOPIC, json.dumps(response))
             
@@ -285,19 +263,6 @@ def simulate_test_process(test_id):
                     del active_tests[test_id]
                 return  # Exit if user chooses to stop
         
-        # Stage 6: Data Analysis (final stage)
-        if test_id not in active_tests:
-            return
-            
-        log_message(f"Test {test_id} - Stage 6: Data Analysis")
-        time.sleep(3)  # Simulate data analysis
-        
-        response['run_status'] = "running"
-        response['run_stage'] = 6
-        response['cycle'] = None  # No more cycles
-        response['timestamp'] = datetime.now().isoformat()
-        client.publish(TEST_SUB_TOPIC, json.dumps(response))
-        log_message(f"Test {test_id} - Stage 6 (Data Analysis) completed")
         
         # Send test completion
         response['run_status'] = "completed"
