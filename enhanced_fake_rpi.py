@@ -16,7 +16,7 @@ PYTHON_BIN = sys.executable  # use same interpreter as main program
 SCRIPT_PY = {
     "script_1": {
         "path": "/opt/ur2/pump_200ml.py",
-        "args": ["--ml", "200"],
+        "args": [],
         "timeout": 900,   # 15 min
     },
     "script_2": {
@@ -41,12 +41,14 @@ PORT = 8883
 USERNAME = "ur2gglab"
 PASSWORD = "Ur2gglab"
 
+
 # Topics
 TEST_PUB_TOPIC = 'ur2/test/init'  # Listen for commands from frontend
 TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
 CONFIRMATION_TOPIC = 'ur2/test/confirm'  # Handle user confirmations
+IMAGE_TOPIC = 'ur2/test/image'  # New topic for sending images
 
-# Test Stages (7 stages workflow)
+# Test Stages (5 stages workflow)
 PROCESS_STAGES = [
     'preparing sample',
     'dissolution', 
@@ -67,6 +69,36 @@ def log_message(message):
     """Print timestamped log message"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
+
+def send_img_to_web(test_id=None, cycle=None):
+    """Send image over MQTT after script 3."""
+    try:
+        import os
+        import glob
+        img_dir = 'test_img'
+        # Find all files in the directory, sort by modified time descending
+        img_files = glob.glob(os.path.join(img_dir, '*'))
+        if not img_files:
+            log_message('No image files found in test_img/')
+            return
+        latest_img = max(img_files, key=os.path.getmtime)
+        with open(latest_img, 'rb') as img_file:
+            img_bytes = img_file.read()
+        filename = os.path.basename(latest_img)
+        # Send metadata first
+        image_metadata = {
+            'testId': test_id,
+            'cycle': cycle,
+            'filename': filename,
+            'size': len(img_bytes),
+            'timestamp': datetime.now().isoformat()
+        }
+        client.publish(IMAGE_TOPIC, json.dumps(image_metadata))
+        # Send raw bytes to a subtopic
+        client.publish(IMAGE_TOPIC + '/raw', img_bytes)
+        log_message(f"Image bytes sent over MQTT for test {test_id}, cycle {cycle}, file {filename}")
+    except Exception as e:
+        log_message(f"Failed to send image: {e}")
 
 
 # --- helper to run python scripts ---
@@ -125,14 +157,13 @@ def run_script_2():
 
     # run_external_py("script_2")  # Run the actual script
 
+
+
 def run_script_3():
     """Run Script 3: Part of 5-cycle process - Transformation and loading to cuvette"""
-    
     log_message("Script 3: Starting transformation and loading to cuvette...")
     time.sleep(2)  # Simulate script 3 execution
-
     #run_external_py("script_3")  # Run the actual script
-
     log_message("Script 3: Complete")
 
 def wait_for_user_confirmation(test_id, cycle_number):
@@ -232,8 +263,10 @@ def simulate_test_process(test_id):
                 response.update(run_stage=run_stage, timestamp=datetime.now().isoformat())
                 client.publish(TEST_SUB_TOPIC, json.dumps(response))
             
+
             # Stage 5: Color Agent Addition (Script 3)
             run_script_3()  # Actually run script 3 here
+            send_img_to_web(test_id=test_id, cycle=cycle)  # Send image after script 3
             if test_id not in active_tests:
                 return
             log_message(f"Test {test_id} - Cycle {cycle}: Color Agent Addition")

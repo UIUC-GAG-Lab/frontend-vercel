@@ -1,7 +1,54 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import mqttService from '../../mqtt/mqttservice';
 import { X, Check, Loader2 } from 'lucide-react';
 
+
+const IMAGE_TOPIC = 'ur2/test/image';
+const IMAGE_RAW_TOPIC = 'ur2/test/image/raw';
+
 const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1, title = "Process Running" }) => {
+  const [imageUrl, setImageUrl] = useState(null);
+  const [latestImageMeta, setLatestImageMeta] = useState(null);
+
+  useEffect(() => { 
+    if (!isOpen || !mqttService.isConnected || !mqttService.client) return;
+
+    // Handler for image metadata
+    const handleImageMeta = (topic, message) => {
+      if (topic === IMAGE_TOPIC) {
+        try {
+          const meta = JSON.parse(message.toString());
+          setLatestImageMeta(meta);
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    // Handler for image raw bytes
+    const handleImageRaw = (topic, message) => {
+      if (topic === IMAGE_RAW_TOPIC && latestImageMeta) {
+        // Convert bytes to blob and object URL
+        const blob = new Blob([message], { type: 'image/png' });
+        const url = URL.createObjectURL(blob);
+        setImageUrl(url);
+      }
+    };
+
+    // Subscribe to image topics
+    mqttService.client.subscribe(IMAGE_TOPIC);
+    mqttService.client.subscribe(IMAGE_RAW_TOPIC);
+    mqttService.client.on('message', handleImageMeta);
+    mqttService.client.on('message', handleImageRaw);
+
+    return () => {
+      mqttService.client.removeListener('message', handleImageMeta);
+      mqttService.client.removeListener('message', handleImageRaw);
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, mqttService.isConnected, latestImageMeta]);
+
   if (!isOpen) return null;
 
   const getStageIcon = (stageIndex, currentStageIndex, currentCycle) => {
@@ -74,6 +121,25 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
 
         {/* Process Steps - Horizontal Layout */}
         <div className="p-6">
+          {/* Latest Image from RPI */}
+          <div className="mb-6 flex flex-col items-center">
+            <div className="mb-2 text-sm text-gray-600">Latest Image from RPI</div>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt="Latest from RPI"
+                className="max-h-64 rounded shadow border"
+                onError={e => {
+                  e.target.onerror = null;
+                  e.target.src = "data:image/svg+xml,%3Csvg width='160' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='100%25' height='100%25' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-size='16'%3ENo Image%3C/text%3E%3C/svg%3E";
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-center max-h-64 h-40 w-64 bg-gray-100 border rounded">
+                <span className="text-gray-400">No Image Available</span>
+              </div>
+            )}
+          </div>
           {/* Completion Message */}
           {currentStage >= stages.length && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
