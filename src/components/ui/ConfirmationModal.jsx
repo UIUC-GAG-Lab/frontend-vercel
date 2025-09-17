@@ -19,7 +19,7 @@ const ConfirmationModal = ({ isOpen, onConfirm, onCancel, testId, message, cycle
         <div className="p-6">
           <div className="mb-4">
             <p className="text-gray-700 text-sm mb-2">Test ID: <span className="font-medium">{testId}</span></p>
-            <p className="text-gray-800">{message}</p>
+            <p className="text-gray-800">Color agent addition - {message}. Continue with next cycle? Check if more NaOH is needed.</p>
           </div>
           
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">

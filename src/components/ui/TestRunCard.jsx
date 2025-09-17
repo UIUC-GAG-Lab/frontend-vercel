@@ -4,11 +4,10 @@ import { Play, Eye, Clock, User, Calendar, Activity } from 'lucide-react';
 export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, currentStage }) {
   const getStatusDisplay = (status) => {
     switch (status?.toLowerCase()) {
-      case 'stopped_by_user':
-        return 'Failed';
       case 'completed':
         return 'Completed';
       case 'failed':
+      case 'error':
         return 'Failed';
       case 'running':
         return 'Running';
@@ -24,9 +23,8 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'failed':
+      case 'error':
         return 'bg-red-100 text-red-800 border-red-200';
-      case 'stopped_by_user':
-        return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'running':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'pending':

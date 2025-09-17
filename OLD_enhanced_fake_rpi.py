@@ -9,26 +9,31 @@ from datetime import datetime
 import subprocess
 import shlex
 import sys
+import json, multiprocessing
 
 # --- config (direct, no env vars) ---
 PYTHON_BIN = sys.executable  # use same interpreter as main program
 
+RPI_TO_PARTS_PATH= r"D:\ur2-common-code\rpi-to-parts\splitted"
+
 SCRIPT_PY = {
-    "script_1": {
-        "path": "/opt/ur2/pump_200ml.py",
-        "args": [],
-        "timeout": 900,   # 15 min
+    "prepare":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_prepare.py",
+        "timeout": 1200,  # 20 min  
     },
-    "script_2": {
-        "path": "/opt/ur2/extract_cycle.py",
-        "args": [],
-        "timeout": 600,   # 10 min
+    "heat":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_heat.py",
     },
-    "script_3": {
-        "path": "/opt/ur2/transform_and_load.py",
-        "args": [],
-        "timeout": 600,   # 10 min
+    "dissolution":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_dissolution.py",
     },
+    "dilution":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_dilution.py",
+    },
+    "color_agents":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_coloragents.py",
+        "args":[],
+    }
 }
 
 
@@ -48,13 +53,12 @@ TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
 CONFIRMATION_TOPIC = 'ur2/test/confirm'  # Handle user confirmations
 IMAGE_TOPIC = 'ur2/test/image'  # New topic for sending images
 
-# Test Stages (5 stages workflow)
+# Test Stages (4 stages workflow)
 PROCESS_STAGES = [
-    'preparing sample',
-    'dissolution', 
-    'filteration',
-    'dilution',
-    'color agent addition'
+    'Sample Preparation',
+    'Dissolution',
+    'Filtration & Dilution',
+    'Color Agent Addition'
 ]
 
 # Global variables
@@ -70,6 +74,14 @@ def log_message(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
 
+
+def now_iso():
+    return datetime.now().isoformat()
+
+def pub(test_id, **fields):
+    payload = {"testId": test_id, "timestamp": now_iso(), **fields}
+    client.publish(TEST_SUB_TOPIC, json.dumps(payload))
+    
 def send_img_to_web(test_id=None, cycle=None):
     """Send image over MQTT after script 3."""
     try:
@@ -94,91 +106,166 @@ def send_img_to_web(test_id=None, cycle=None):
             'timestamp': datetime.now().isoformat()
         }
         client.publish(IMAGE_TOPIC, json.dumps(image_metadata))
-        # Send raw bytes to a subtopic
-        client.publish(IMAGE_TOPIC + '/raw', img_bytes)
+        client.publish(IMAGE_TOPIC + '/raw', img_bytes)  # Send raw bytes to a subtopic
         log_message(f"Image bytes sent over MQTT for test {test_id}, cycle {cycle}, file {filename}")
     except Exception as e:
         log_message(f"Failed to send image: {e}")
 
 
 # --- helper to run python scripts ---
-def run_external_py(name: str):
-    cfg = SCRIPT_PY[name]
-    cmd = [PYTHON_BIN, cfg["path"], *cfg["args"]]
+def run_external_py(name: str, timeout=None):
+    print("#"*30)
+    time.sleep(3)  # Simulate script execution time
+    print(f"Simulating {name} script...")
+    print("#"*30)
 
-    log_message(f"{name}: launching -> {cmd}")
+
+## deployment code
+# def run_external_py2(name: str, timeout=None):
+#     cfg = SCRIPT_PY[name]
+#     args = cfg.get("args", [])
+#     cmd = [PYTHON_BIN, cfg["path"], *args]
+#     actual_timeout = timeout if timeout is not None else cfg.get("timeout")
+
+#     log_message(f"{name}: launching -> {cmd}")
+#     try:
+#         res = subprocess.run(
+#             cmd,
+#             capture_output=True,
+#             text=True,
+#             timeout=actual_timeout,
+#             check=False,
+#         )
+#     except subprocess.TimeoutExpired:
+#         log_message(f"{name}: TIMEOUT after {actual_timeout}s")
+#         raise
+#     except FileNotFoundError:
+#         log_message(f"{name}: file not found -> {cfg['path']}")
+#         raise
+
+#     if res.stdout:
+#         log_message(f"{name} stdout:\n{res.stdout.strip()[-300:]}")
+#     if res.stderr:
+#         log_message(f"{name} stderr:\n{res.stderr.strip()[-300:]}")
+
+#     if res.returncode != 0:
+#         raise RuntimeError(f"{name} failed with code {res.returncode}")
+
+#     log_message(f"{name}: finished successfully (code 0)")
+
+
+
+#debug code
+import threading, time, math
+
+def _simulated_heat_process(run_event):
+    """
+    Fake long-running heater loop.
+    Replace the internals with your real control logic later.
+    Must exit promptly when run_event.clear() is called.
+    """
+    log_message("heat[sim]: process started")
     try:
-        res = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=cfg["timeout"],
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        log_message(f"{name}: TIMEOUT after {cfg['timeout']}s")
-        raise
-    except FileNotFoundError:
-        log_message(f"{name}: file not found -> {cfg['path']}")
-        raise
+        target_c = 60.0
+        temp_c   = 22.0
+        t0 = time.time()
+        while run_event.is_set():
+            # toy thermal model: temp moves toward target
+            temp_c += (target_c - temp_c) * 0.08
+            # log every ~5s
+            if int(time.time() - t0) % 5 == 0:
+                log_message(f"heat[sim]: temp={temp_c:.1f}C target={target_c:.1f}C")
+            time.sleep(0.25)  # keep the loop responsive and low-CPU
+    finally:
+        log_message("heat[sim]: process exiting (heater off)")
 
-    if res.stdout:
-        log_message(f"{name} stdout:\n{res.stdout.strip()[-300:]}")
-    if res.stderr:
-        log_message(f"{name} stderr:\n{res.stderr.strip()[-300:]}")
+def heat_worker(stop_event):
+    """
+    Start a simulated long-running 'heat' process and keep it alive until:
+      - stop_event is set  (normal shutdown), or
+      - the simulated process dies unexpectedly (error path).
+    """
+    # internal event the simulated process uses to decide whether to keep running
+    run_event = threading.Event()
+    run_event.set()
 
-    if res.returncode != 0:
-        raise RuntimeError(f"{name} failed with code {res.returncode}")
+    try:
+        log_message("heat: starting simulated background heat process")
+        th = threading.Thread(target=_simulated_heat_process, args=(run_event,), daemon=True)
+        th.start()
 
-    log_message(f"{name}: finished successfully (code 0)")
+        # monitor loop (mirrors your subprocess .poll() check)
+        while not stop_event.is_set():
+            if not th.is_alive():
+                log_message("heat: simulated process exited unexpectedly!")
+                break
+            time.sleep(1)
+
+        # request the simulated "process" to stop
+        if th.is_alive():
+            log_message("heat: requesting simulated heat process to stop...")
+            run_event.clear()
+            th.join(timeout=10)
+
+            if th.is_alive():
+                # Can't force-kill threads; ensure your loop respects run_event to exit promptly.
+                log_message("heat: simulated heat process didn't stop in time (still alive).")
+
+        log_message("heat: background heat process stopped")
+
+    except Exception as e:
+        log_message(f"heat: error in heat_worker: {e}")
+
+# deployment Code
+# --- Heat script as background process ---
+# def heat_worker_original(stop_event):
+#     try:
+#         log_message("heat: starting background heat script")
+#         proc = subprocess.Popen([PYTHON_BIN, SCRIPT_PY["heat"]["path"]])
+#         while not stop_event.is_set():
+#             if proc.poll() is not None:
+#                 log_message("heat: process exited unexpectedly!")
+#                 break
+#             time.sleep(1)
+#         if proc.poll() is None:
+#             log_message("heat: terminating heat process...")
+#             proc.terminate()
+#             try:
+#                 proc.wait(timeout=10)
+#             except subprocess.TimeoutExpired:
+#                 log_message("heat: killing heat process...")
+#                 proc.kill()
+#         log_message("heat: background heat script stopped")
+#     except Exception as e:
+#         log_message(f"heat: error in heat_worker: {e}")
 
 
+def start_heat():
+    ev = multiprocessing.Event()
+    proc = multiprocessing.Process(target=heat_worker, args=(ev,))
+    proc.start()
+    log_message("Heat process started in background.")
+    return ev, proc
+
+def stop_heat(ev, proc, timeout=20):
+    try:
+        if ev: ev.set()
+        if proc: proc.join(timeout=timeout)
+    finally:
+        log_message("Heat process stopped.")
 
 
-def run_script_1():
-    """Run Script 1 ONCE: Pump 200mL NaOH and keep heating pad on - INDEPENDENT STAGE"""
-    log_message("Script 1: Pumping 200mL of NaOH...")
-    
-    time.sleep(2)  # Simulate pumping time
-    log_message("Script 1: Turning on heating pad...")
-    time.sleep(1)  # Simulate heating pad activation
-
-    #run_external_py("script_1")  # Run the actual script
-
-
-    log_message("Script 1: COMPLETED PERMANENTLY - Heating pad is now ON")
-
-def run_script_2():
-    """Run Script 2: Part of 5-cycle process - Extraction and processing"""
-    log_message("Script 2: Starting extraction process...")
-    
-    time.sleep(3)  # Simulate script 2 execution
-    log_message("Script 2: Complete")
-
-    # run_external_py("script_2")  # Run the actual script
-
-
-
-def run_script_3():
-    """Run Script 3: Part of 5-cycle process - Transformation and loading to cuvette"""
-    log_message("Script 3: Starting transformation and loading to cuvette...")
-    time.sleep(2)  # Simulate script 3 execution
-    #run_external_py("script_3")  # Run the actual script
-    log_message("Script 3: Complete")
 
 def wait_for_user_confirmation(test_id, cycle_number):
     """Send confirmation request to frontend and wait for response"""
     log_message(f"Test {test_id}: Requesting user confirmation after cycle {cycle_number}/5...")
+
+    conf_msg = f"Cycle {cycle_number}/5 completed"
     
-    confirmation_request = {
-        "testId": test_id,
-        "run_status": "waiting_confirmation",
-        "message": f"Color agent addition - Cycle {cycle_number}/5 completed. Continue with next cycle? Check if more NaOH is needed.",
-        "cycle": cycle_number,
-        "timestamp": datetime.now().isoformat()
-    }
-    
-    client.publish(TEST_SUB_TOPIC, json.dumps(confirmation_request))
+    pub(test_id, 
+        run_status="waiting_confirmation", 
+        message=conf_msg, 
+        cycle=cycle_number)
     
     # Wait for user response indefinitely
     confirmation_key = f"{test_id}_confirmation"
@@ -198,139 +285,84 @@ def wait_for_user_confirmation(test_id, cycle_number):
     log_message(f"Test {test_id}: User {'confirmed' if response else 'declined'} to continue after cycle {cycle_number}")
     return response
 
-def simulate_test_process(test_id):
-    log_message(f"Starting test process for {test_id}")
+
+
+def simulate_test_process(test_id: str, max_cycles: int = 5):
+    pub(test_id, 
+        run_status="started", 
+        run_stage=0)
     
-    response = {
-        "testId": test_id,
-        "run_status": "started",
-        "run_stage": 0,
-        "timestamp": datetime.now().isoformat()
-    }
+    heat_ev = heat_proc = None
 
     try:
-        # Stage 1: Preparing Sample (Script 1) - Run ONCE ONLY
-        if test_id not in active_tests:
-            return
-            
-        log_message(f"Test {test_id} - Stage 1: Preparing Sample (Script 1)")
-        
-        # Update to show stage 1 is starting
-        response['run_status'] = "running"
-        response['run_stage'] = 1
-        response['timestamp'] = datetime.now().isoformat()
-        client.publish(TEST_SUB_TOPIC, json.dumps(response))
-        
-        # Run Script 1 (independent, runs only once)
-        run_script_1()  # Pump 200mL NaOH + heating pad
-        
-        log_message(f"Test {test_id} - Stage 1 (Preparing Sample) COMPLETED PERMANENTLY")
-        
-        
-        # Stages 2-5: Cycle through Script 2 & 3 (5 times with confirmations)
-        for cycle in range(1,6):  # 5 cycles
-            
+        # 1) prepare once
+        log_message(f"Test {test_id}: Running prepare script")
+        run_external_py("prepare")
+        pub(test_id, 
+            run_status="running", 
+            run_stage=1)
 
+        # 2) heat in background for entire test
+        heat_ev, heat_proc = start_heat()
+
+        user_stopped = False
+        per_cycle_steps = [("dissolution", 2), 
+                           ("dilution", 3), 
+                           ("color_agents", 4)]
+
+        for cycle in range(1, max_cycles + 1):
             if test_id not in active_tests:
-                return
-                
-            log_message(f"Test {test_id} - Starting Cycle {cycle}/5")
-            
-            # Send cycle start notification (resets stages 2-5 in UI)
-            cycle_response = {
-                "testId": test_id,
-                "run_status": "cycle_start",
-                "cycle": cycle,
-                "run_stage": 2,  # Reset to stage 2 for each cycle
-                "timestamp": datetime.now().isoformat()
-            }
-            client.publish(TEST_SUB_TOPIC, json.dumps(cycle_response))
-            
-            ####
+                break
 
-            response['cycle'] = cycle
-            
-            run_script_2()  # Actually run script 2 here
-            for run_stage, label in [
-                (2, "Dissolution"),
-                (3, "Filtration"), 
-                (4, "Dilution"),
-            ]:
-                if test_id not in active_tests:
-                    return
-                log_message(f"Test {test_id} - Cycle {cycle}: {label}")
-                time.sleep(1.5)
-                response.update(run_stage=run_stage, timestamp=datetime.now().isoformat())
-                client.publish(TEST_SUB_TOPIC, json.dumps(response))
-            
+            log_message(f"Test {test_id} - Starting Cycle {cycle}/{max_cycles}")
+            pub(test_id, 
+                run_status="cycle_start", 
+                cycle=cycle, 
+                run_stage=2)
 
-            # Stage 5: Color Agent Addition (Script 3)
-            run_script_3()  # Actually run script 3 here
-            send_img_to_web(test_id=test_id, cycle=cycle)  # Send image after script 3
-            if test_id not in active_tests:
-                return
-            log_message(f"Test {test_id} - Cycle {cycle}: Color Agent Addition")
-            response['run_stage'] = 5
-            response['timestamp'] = datetime.now().isoformat()
-            client.publish(TEST_SUB_TOPIC, json.dumps(response))
-            
-            log_message(f"Test {test_id} - Cycle {cycle}/5 completed")
-            
-            # After each cycle, ask for user confirmation
+            for step_name, stage in per_cycle_steps:
+                log_message(f"Test {test_id} - Cycle {cycle}: Running {step_name}")
+                run_external_py(step_name)
+                if step_name == "color_agents":
+                    send_img_to_web(test_id=test_id, cycle=cycle)
+                pub(test_id, 
+                    run_status="running", 
+                    run_stage=stage, 
+                    cycle=cycle)
+
+            log_message(f"Test {test_id} - Cycle {cycle}/{max_cycles} completed")
+
+            # confirm continuation
             if not wait_for_user_confirmation(test_id, cycle):
-                log_message(f"Test {test_id} - User chose to stop after cycle {cycle}")
-                
-                # Send stopped/failed status to frontend
-                stopped_response = {
-                    "testId": test_id,
-                    "run_status": "failed",
-                    "message": f"Process stopped by user after cycle {cycle}/5",
-                    "run_stage": 5,
-                    "cycle": cycle,
-                    "timestamp": datetime.now().isoformat()
-                }
-                client.publish(TEST_SUB_TOPIC, json.dumps(stopped_response))
-                
-                # Remove from active tests
-                if test_id in active_tests:
-                    del active_tests[test_id]
-                return  # Exit if user chooses to stop
-        
-        
-        # Send test completion
-        response['run_status'] = "completed"
-        response['run_stage'] = len(PROCESS_STAGES)
-        response['cycle'] = None
-        response['timestamp'] = datetime.now().isoformat()
-        client.publish(TEST_SUB_TOPIC, json.dumps(response))
+                msg = f"test interrupted after cycle {cycle}"
+                log_message(f"Test {test_id} - {msg}")
+                pub(test_id, 
+                    run_status="failed", 
+                    message=msg, 
+                    run_stage=4, 
+                    cycle=cycle)
+                user_stopped = True
+                break
 
-        log_message(f"Test {test_id} completed successfully!")
-        
-        # Remove from active tests
-        if test_id in active_tests:
+        # always stop heat
+        stop_heat(heat_ev, heat_proc)
+
+        # wrap up (only if not user-stopped and still active)
+        if not user_stopped and test_id in active_tests:
+            pub(test_id, 
+                run_status="completed", 
+                run_stage=len(PROCESS_STAGES), 
+                cycle=None)
+            log_message(f"Test {test_id} completed successfully!")
             del active_tests[test_id]
-        
-        log_message(f"Test {test_id} completed successfully!")
-        
-        # Remove from active tests
-        if test_id in active_tests:
-            del active_tests[test_id]
-            
+
     except Exception as e:
-        log_message(f"Error in test {test_id}: {str(e)}")
-        
-        # Send error response
-        error_response = {
-            "testId": test_id,
-            "run_status": "error",
-            "message": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-        client.publish(TEST_SUB_TOPIC, json.dumps(error_response))
-        
-        # Remove from active tests
+        log_message(f"Error in test {test_id}: {e}")
+        stop_heat(heat_ev, heat_proc, timeout=10)
+        pub(test_id, run_status="error", message=str(e))
         if test_id in active_tests:
             del active_tests[test_id]
+
 
 def on_connect(client, userdata, flags, rc):
     """Callback for when client connects to broker"""

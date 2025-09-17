@@ -51,20 +51,22 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
 
   if (!isOpen) return null;
 
+
+  // Updated for 4 stages
   const getStageIcon = (stageIndex, currentStageIndex, currentCycle) => {
-    // Stage 1 (Preparing Sample) is completed after it runs OR when process is finished
+    // Stage 1 (Sample Preparation) is completed after it runs OR when process is finished
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    // For stages 2-5, only show completed if current stage is higher in same cycle OR process is completed
-    else if (stageIndex > 0 && stageIndex < 5 && (stageIndex < currentStageIndex || currentStageIndex >= 6)) {
+    // For stages 2-4, only show completed if current stage is higher in same cycle OR process is completed
+    else if (stageIndex > 0 && stageIndex < 4 && (stageIndex < currentStageIndex || currentStageIndex >= 4)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    // Stage 6 (Results Ready) only completed when process is finished
-    else if (stageIndex === 5 && currentStageIndex >= 6) {
+    // Stage 4 only completed when process is finished
+    else if (stageIndex === 3 && currentStageIndex >= 4) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    else if (stageIndex === currentStageIndex && currentStageIndex < 6) {
+    else if (stageIndex === currentStageIndex && currentStageIndex < 4) {
       return <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />;
     } else {
       return <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>;
@@ -72,19 +74,16 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
   };
 
   const getStageStatus = (stageIndex, currentStageIndex, currentCycle) => {
-    // Stage 1 (Preparing Sample) is completed after it runs OR when process is finished
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return 'completed';
     }
-    // For stages 2-5, only show completed if current stage is higher in same cycle OR process is completed
-    else if (stageIndex > 0 && stageIndex < 5 && (stageIndex < currentStageIndex || currentStageIndex >= 6)) {
+    else if (stageIndex > 0 && stageIndex < 4 && (stageIndex < currentStageIndex || currentStageIndex >= 4)) {
       return 'completed';
     }
-    // Stage 6 (Results Ready) only completed when process is finished
-    else if (stageIndex === 5 && currentStageIndex >= 6) {
+    else if (stageIndex === 3 && currentStageIndex >= 4) {
       return 'completed';
     }
-    else if (stageIndex === currentStageIndex && currentStageIndex < 6) {
+    else if (stageIndex === currentStageIndex && currentStageIndex < 4) {
       return 'running';
     } else {
       return 'pending';
