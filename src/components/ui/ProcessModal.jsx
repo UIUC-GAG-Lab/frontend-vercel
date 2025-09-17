@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import mqttService from '../../mqtt/mqttservice';
-import { X, Check, Loader2 } from 'lucide-react';
+import { X, Check, Loader2, XCircle } from 'lucide-react';
 
 
 const IMAGE_TOPIC = 'ur2/test/image';
 const IMAGE_RAW_TOPIC = 'ur2/test/image/raw';
 
-const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1, title = "Process Running" }) => {
+// Add isInterrupted prop to control UI when process is stopped by user
+const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1, title = "Process Running", isInterrupted = false }) => {
   const [imageUrl, setImageUrl] = useState(null);
   const [latestImageMeta, setLatestImageMeta] = useState(null);
 
@@ -52,17 +53,18 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
   if (!isOpen) return null;
 
 
-  // Updated for 4 stages
-  const getStageIcon = (stageIndex, currentStageIndex, currentCycle) => {
-    // Stage 1 (Sample Preparation) is completed after it runs OR when process is finished
+  // Updated for 4 stages, with interruption support
+  const getStageIcon = (stageIndex, currentStageIndex, currentCycle, interruptedIdx = null) => {
+    if (interruptedIdx !== null && stageIndex > interruptedIdx) {
+      // Show cross tick for all after last successful
+      return <XCircle className="w-4 h-4 text-red-500" />;
+    }
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    // For stages 2-4, only show completed if current stage is higher in same cycle OR process is completed
     else if (stageIndex > 0 && stageIndex < 4 && (stageIndex < currentStageIndex || currentStageIndex >= 4)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    // Stage 4 only completed when process is finished
     else if (stageIndex === 3 && currentStageIndex >= 4) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
@@ -73,7 +75,10 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
     }
   };
 
-  const getStageStatus = (stageIndex, currentStageIndex, currentCycle) => {
+  const getStageStatus = (stageIndex, currentStageIndex, currentCycle, interruptedIdx = null) => {
+    if (interruptedIdx !== null && stageIndex > interruptedIdx) {
+      return 'failed';
+    }
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return 'completed';
     }
@@ -151,56 +156,69 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
           
           <div className="flex items-center justify-center mb-8 overflow-x-auto">
             <div className="flex items-center space-x-4">
-              {stages.map((stage, index) => {
-                const status = getStageStatus(index, currentStage, currentCycle);
-                const isLast = index === stages.length - 1;
-
-                return (
-                  <div key={index} className="flex items-center">
-                    {/* Stage Item */}
-                    <div className="flex flex-col items-center text-center">
-                      {/* Icon Container */}
-                      <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                        status === 'completed' ? 'bg-green-100 border-green-500' :
-                        status === 'running' ? 'bg-blue-100 border-blue-500' :
-                        'bg-gray-100 border-gray-300'
-                      }`}>
-                        {getStageIcon(index, currentStage, currentCycle)}
-                      </div>
-                      
-                      {/* Stage Info */}
-                      <div className="mt-2 w-20">
-                        <div className={`text-xs font-medium ${
-                          status === 'completed' ? 'text-green-600' :
-                          status === 'running' ? 'text-blue-600' :
-                          'text-gray-500'
+              {/* Determine interruption index if interrupted */}
+              {(() => {
+                let interruptedIdx = null;
+                if (isInterrupted) {
+                  // Last completed stage index
+                  interruptedIdx = -1;
+                  for (let i = 0; i < stages.length; i++) {
+                    const status = getStageStatus(i, currentStage, currentCycle, null);
+                    if (status === 'completed') interruptedIdx = i;
+                  }
+                }
+                return stages.map((stage, index) => {
+                  const status = getStageStatus(index, currentStage, currentCycle, interruptedIdx);
+                  const isLast = index === stages.length - 1;
+                  return (
+                    <div key={index} className="flex items-center">
+                      {/* Stage Item */}
+                      <div className="flex flex-col items-center text-center">
+                        {/* Icon Container */}
+                        <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                          status === 'completed' ? 'bg-green-100 border-green-500' :
+                          status === 'running' ? 'bg-blue-100 border-blue-500' :
+                          status === 'failed' ? 'bg-red-100 border-red-500' :
+                          'bg-gray-100 border-gray-300'
                         }`}>
-                          Stage {index + 1}
+                          {getStageIcon(index, currentStage, currentCycle, interruptedIdx)}
                         </div>
-                        <div className={`text-xs capitalize mt-1 leading-tight ${
-                          status === 'completed' ? 'text-green-600' :
-                          status === 'running' ? 'text-blue-600' :
-                          'text-gray-500'
-                        }`}>
-                          {stage}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {status === 'completed' && 'Done'}
-                          {status === 'running' && 'Active'}
-                          {status === 'pending' && 'Waiting'}
+                        {/* Stage Info */}
+                        <div className="mt-2 w-20">
+                          <div className={`text-xs font-medium ${
+                            status === 'completed' ? 'text-green-600' :
+                            status === 'running' ? 'text-blue-600' :
+                            status === 'failed' ? 'text-red-600' :
+                            'text-gray-500'
+                          }`}>
+                            Stage {index + 1}
+                          </div>
+                          <div className={`text-xs capitalize mt-1 leading-tight ${
+                            status === 'completed' ? 'text-green-600' :
+                            status === 'running' ? 'text-blue-600' :
+                            status === 'failed' ? 'text-red-600' :
+                            'text-gray-500'
+                          }`}>
+                            {stage}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {status === 'completed' && 'Done'}
+                            {status === 'running' && 'Active'}
+                            {status === 'pending' && 'Waiting'}
+                            {status === 'failed' && 'Stopped'}
+                          </div>
                         </div>
                       </div>
+                      {/* Connector Line */}
+                      {!isLast && (
+                        <div className="w-12 h-0.5 mx-3">
+                          <div className={`w-full h-full transition-all duration-300 ${getConnectorStyles(index, currentStage, currentCycle)}`}></div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Connector Line */}
-                    {!isLast && (
-                      <div className="w-12 h-0.5 mx-3">
-                        <div className={`w-full h-full transition-all duration-300 ${getConnectorStyles(index, currentStage, currentCycle)}`}></div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
 

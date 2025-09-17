@@ -426,6 +426,10 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         currentCycle={currentCycle}
         stages={processStages}
         title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : activeTestId ? `Test Status - ${activeTestId}` : "Test Status"}
+        isInterrupted={
+          // Consider interrupted if selectedRun status is failed, error, or stopped
+          selectedRun && ["failed", "error", "stopped"].includes((selectedRun.run_status || '').toLowerCase())
+        }
       />
 
       {/* Confirmation Modal */}
