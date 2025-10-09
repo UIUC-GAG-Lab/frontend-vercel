@@ -4,15 +4,10 @@ Purpose
 -------
 React-based operator GUI for creating and monitoring runs. Connects to devices via MQTT and to the backend via HTTP.
 
-Who should read this
----------------------
-- Frontend engineers working on UI and user flows
-- QA engineers testing the operator experience
-
 Quick overview
 --------------
 - `src/App.js` — App entry; initializes `mqttservice` and mounts UI pages.
-- `src/mqtt/mqttservice.jsx` — MQTT client (HiveMQ Cloud in code). Topics of interest:
+- `src/mqtt/mqttservice.jsx` — MQTT client (HiveMQ Cloud in code).
   - Publish start: `ur2/test/init`
   - Subscribe stage updates: `ur2/test/stage`
   - Publish confirmations: `ur2/test/confirm`
@@ -39,16 +34,7 @@ Testing without a Pi
 - Use the simulator scripts in `ur2-common-code/rpi-to-ui` to publish MQTT messages that mimic Pi stage updates.
 - Or run the simple Python MQTT publisher to send a `waiting_confirmation` message and confirm the UI shows the modal.
 
-Notes & gotchas
-----------------
-- React 19 + react-scripts 5 may require a compatible Node version; if `npm start` fails, try Node 18.
-- WebSocket MQTT (wss) requires the broker to be reachable from the browser and proper TLS certs for production.
 
-Next tasks for contributors
---------------------------
-- Standardize on `trial_id` for MQTT payloads to match backend expectations.
-- Add tests for the CreateTest workflow and a mock MQTT broker for CI tests.
-# Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
