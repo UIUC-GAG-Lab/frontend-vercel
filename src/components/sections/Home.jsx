@@ -5,6 +5,7 @@ import TestDetailsModal from '../ui/TestDetailsModal';
 import ProcessModal from '../ui/ProcessModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import mqttService from '../../mqtt/mqttservice';
+import ProcessModalNew from '../ui/ProcessModalNew';
 
 export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [runs, setRuns] = useState([]);
@@ -26,9 +27,13 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     'Sample Preparation',
     'Dissolution',
     'Filtration & Dilution',
-    'Color Agent Addition'
+    // 'Color Agent Addition',
+    // 'Image Capture'
+    'Aluminum Concentration Analysis',
+    'Silicon Concentration Analysis',
   ]);
   const totalCycles = 5;
+
 
   // Function to update run status in database
   const updateRunStatus = async (testId, run_status, run_stage) => {
@@ -411,6 +416,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         </div>
       )}
 
+
       {/* Test Details Modal */}
       <TestDetailsModal
         isOpen={showDetailsModal}
@@ -419,7 +425,20 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       />
 
       {/* Process Status Modal */}
-      <ProcessModal
+      {/* <ProcessModal
+        isOpen={showProcessModal}
+        onClose={handleCloseProcessModal}
+        currentStage={currentProcessStage}
+        currentCycle={currentCycle}
+        stages={processStages}
+        title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : activeTestId ? `Test Status - ${activeTestId}` : "Test Status"}
+        isInterrupted={
+          // Consider interrupted if selectedRun status is failed, error, or stopped
+          selectedRun && ["failed", "error", "stopped"].includes((selectedRun.run_status || '').toLowerCase())
+        }
+      /> */}
+
+      <ProcessModalNew
         isOpen={showProcessModal}
         onClose={handleCloseProcessModal}
         currentStage={currentProcessStage}

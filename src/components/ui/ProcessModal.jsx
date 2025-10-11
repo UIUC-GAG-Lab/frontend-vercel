@@ -53,7 +53,7 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
   if (!isOpen) return null;
 
 
-  // Updated for 4 stages, with interruption support
+  // Updated for 5 stages, with interruption support
   const getStageIcon = (stageIndex, currentStageIndex, currentCycle, interruptedIdx = null) => {
     if (interruptedIdx !== null && stageIndex > interruptedIdx) {
       // Show cross tick for all after last successful
@@ -62,13 +62,13 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    else if (stageIndex > 0 && stageIndex < 4 && (stageIndex < currentStageIndex || currentStageIndex >= 4)) {
+    else if (stageIndex > 0 && stageIndex < 5 && (stageIndex < currentStageIndex || currentStageIndex >= 5)) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    else if (stageIndex === 3 && currentStageIndex >= 4) {
+    else if (stageIndex === 4 && currentStageIndex >= 5) {
       return <Check className="w-4 h-4 text-green-600" />;
     }
-    else if (stageIndex === currentStageIndex && currentStageIndex < 4) {
+    else if (stageIndex === currentStageIndex && currentStageIndex < 5) {
       return <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />;
     } else {
       return <div className="w-4 h-4 rounded-full border-2 border-gray-300"></div>;
@@ -82,13 +82,13 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
     if (stageIndex === 0 && (currentStageIndex >= 1)) {
       return 'completed';
     }
-    else if (stageIndex > 0 && stageIndex < 4 && (stageIndex < currentStageIndex || currentStageIndex >= 4)) {
+    else if (stageIndex > 0 && stageIndex < 5 && (stageIndex < currentStageIndex || currentStageIndex >= 5)) {
       return 'completed';
     }
-    else if (stageIndex === 3 && currentStageIndex >= 4) {
+    else if (stageIndex === 4 && currentStageIndex >= 5) {
       return 'completed';
     }
-    else if (stageIndex === currentStageIndex && currentStageIndex < 4) {
+    else if (stageIndex === currentStageIndex && currentStageIndex < 5) {
       return 'running';
     } else {
       return 'pending';

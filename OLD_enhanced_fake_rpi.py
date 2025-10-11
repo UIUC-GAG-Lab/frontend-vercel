@@ -14,7 +14,7 @@ import json, multiprocessing
 # --- config (direct, no env vars) ---
 PYTHON_BIN = sys.executable  # use same interpreter as main program
 
-RPI_TO_PARTS_PATH= r"D:\ur2-common-code\rpi-to-parts\splitted"
+RPI_TO_PARTS_PATH= r"/home/username/ur2-common-code/rpi-to-parts/splitted"
 
 SCRIPT_PY = {
     "prepare":{
@@ -30,10 +30,18 @@ SCRIPT_PY = {
     "dilution":{
         "path": f"{RPI_TO_PARTS_PATH}/ur2_dilution.py",
     },
-    "color_agents":{
-        "path": f"{RPI_TO_PARTS_PATH}/ur2_coloragents.py",
+    # "color_agents":{
+    #     "path": f"{RPI_TO_PARTS_PATH}/ur2_coloragents.py",
+    #     "args":[],
+    # },
+    "aluminum":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_aluminum.py",
         "args":[],
-    }
+    },
+    "silicon":{
+        "path": f"{RPI_TO_PARTS_PATH}/ur2_silicon.py",
+        "args":[],
+    },
 }
 
 
@@ -53,12 +61,15 @@ TEST_SUB_TOPIC = 'ur2/test/stage'  # Send responses to frontend
 CONFIRMATION_TOPIC = 'ur2/test/confirm'  # Handle user confirmations
 IMAGE_TOPIC = 'ur2/test/image'  # New topic for sending images
 
-# Test Stages (4 stages workflow)
+# Test Stages (5 stages workflow)
 PROCESS_STAGES = [
     'Sample Preparation',
     'Dissolution',
     'Filtration & Dilution',
-    'Color Agent Addition'
+    # 'Color Agent Addition',
+    # "Image Capture"
+    'Aluminum Concentration Analysis',
+    'Silicon Concentration Analysis'
 ]
 
 # Global variables
@@ -81,17 +92,26 @@ def now_iso():
 def pub(test_id, **fields):
     payload = {"testId": test_id, "timestamp": now_iso(), **fields}
     client.publish(TEST_SUB_TOPIC, json.dumps(payload))
-    
-def send_img_to_web(test_id=None, cycle=None):
+
+def send_img_to_web(test_id=None, cycle=None, material=None):
     """Send image over MQTT after script 3."""
     try:
         import os
         import glob
-        img_dir = 'test_img'
+        
+        # Determine the image directory based on material
+        if material == 'aluminum':
+            img_dir = 'test_img/al'
+        elif material == 'silicon':
+            img_dir = 'test_img/si'
+        else:
+            # Fallback to general test_img directory
+            img_dir = 'test_img'
+        
         # Find all files in the directory, sort by modified time descending
         img_files = glob.glob(os.path.join(img_dir, '*'))
         if not img_files:
-            log_message('No image files found in test_img/')
+            log_message(f'No image files found in {img_dir}/')
             return
         latest_img = max(img_files, key=os.path.getmtime)
         with open(latest_img, 'rb') as img_file:
@@ -103,11 +123,12 @@ def send_img_to_web(test_id=None, cycle=None):
             'cycle': cycle,
             'filename': filename,
             'size': len(img_bytes),
+            'material': material,
             'timestamp': datetime.now().isoformat()
         }
         client.publish(IMAGE_TOPIC, json.dumps(image_metadata))
         client.publish(IMAGE_TOPIC + '/raw', img_bytes)  # Send raw bytes to a subtopic
-        log_message(f"Image bytes sent over MQTT for test {test_id}, cycle {cycle}, file {filename}")
+        log_message(f"Image bytes sent over MQTT for test {test_id}, cycle {cycle}, file {filename}, material {material}")
     except Exception as e:
         log_message(f"Failed to send image: {e}")
 
@@ -308,7 +329,10 @@ def simulate_test_process(test_id: str, max_cycles: int = 5):
         user_stopped = False
         per_cycle_steps = [("dissolution", 2), 
                            ("dilution", 3), 
-                           ("color_agents", 4)]
+                           # ("color_agents", 4),
+                           ("aluminum", 4),
+                           ("silicon", 5)
+                        ]
 
         for cycle in range(1, max_cycles + 1):
             if test_id not in active_tests:
@@ -323,8 +347,10 @@ def simulate_test_process(test_id: str, max_cycles: int = 5):
             for step_name, stage in per_cycle_steps:
                 log_message(f"Test {test_id} - Cycle {cycle}: Running {step_name}")
                 run_external_py(step_name)
-                if step_name == "color_agents":
-                    send_img_to_web(test_id=test_id, cycle=cycle)
+                
+                if step_name in ['aluminum', 'silicon']:
+                    send_img_to_web(test_id=test_id, cycle=cycle, material=step_name)
+
                 pub(test_id, 
                     run_status="running", 
                     run_stage=stage, 
@@ -339,7 +365,7 @@ def simulate_test_process(test_id: str, max_cycles: int = 5):
                 pub(test_id, 
                     run_status="failed", 
                     message=msg, 
-                    run_stage=4, 
+                    run_stage=5, 
                     cycle=cycle)
                 user_stopped = True
                 break
