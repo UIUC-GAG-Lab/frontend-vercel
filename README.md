@@ -1,106 +1,280 @@
-# ur2-frontend-code — Onboarding
+# ur2-frontend-code — User Interface System
 
-Purpose
--------
-React-based operator GUI for creating and monitoring runs. Connects to devices via MQTT and to the backend via HTTP.
+## What This System Does
 
-Quick overview
---------------
-- `src/App.js` — App entry; initializes `mqttservice` and mounts UI pages.
-- `src/mqtt/mqttservice.jsx` — MQTT client (HiveMQ Cloud in code).
-  - Publish start: `ur2/test/init`
-  - Subscribe stage updates: `ur2/test/stage`
-  - Publish confirmations: `ur2/test/confirm`
-- `src/components/sections/CreateTest.jsx` — Create run UI
-- `src/components/dashboard/*` — Sidebar, MainView, Console
+**In simple terms**: The frontend is a web-based control panel that lets users create lab analysis tests, monitor their progress in real-time, and view the results. It's the main interface that operators use to interact with the UR2 Device.
 
-Quickstart (local development)
-------------------------------
-1. Install and run:
+## Purpose
 
+React-based web application that provides an intuitive user interface for creating, monitoring, and managing UR2 analysis tests. The frontend connects to both the backend API for data management and Raspberry Pi devices via MQTT for real-time communication.
+
+## How It Works (Quick Overview)
+
+1. **Test Creation** - Users create new UR2 Experiment tests through a web form
+2. **Real-time Monitoring** - Live updates from Raspberry Pi devices via MQTT
+3. **Status Tracking** - Visual progress indicators and stage monitoring
+4. **Results Display** - View analysis results and historical data
+5. **Device Communication** - Send commands to and receive updates from laboratory devices
+
+## Directory Structure
+
+### Core Application Files
+- **`src/App.js`** — Main application component with routing and MQTT initialization
+- **`src/index.js`** — Application entry point and React rendering
+- **`src/index.css`** — Global styles and Tailwind CSS configuration
+
+### MQTT Communication
+- **`src/mqtt/mqttservice.jsx`** — MQTT client for real-time device communication
+  - Connects to HiveMQ Cloud broker
+  - Publishes start commands to devices
+  - Subscribes to status updates
+  - Handles confirmation requests
+
+### User Interface Components
+
+#### Dashboard Components (`src/components/dashboard/`)
+- **`Sidebar.jsx`** — Navigation menu with page selection
+- **`MainView.jsx`** — Main content area with page routing
+- **`Console.jsx`** — Real-time log display and system messages
+
+#### Section Components (`src/components/sections/`)
+- **`CreateTest.jsx`** — Form for creating new UR2 tests
+- **`Home.jsx`** — Dashboard home page with system overview
+- **`Settings.jsx`** — System configuration and settings
+
+#### UI Components (`src/components/ui/`)
+- **`TestRunCard.jsx`** — Display card for individual test runs
+- **`ProcessModal.jsx`** — Modal for showing test progress
+- **`TestDetailsModal.jsx`** — Detailed view of test information
+- **`ConfirmationModal.jsx`** — User confirmation dialogs
+
+## Key Features
+
+### Test Management
+- **Create Tests**: Start new UR2 Experiment runs with custom parameters
+- **Monitor Progress**: Real-time status updates from laboratory devices
+- **View Results**: Display analysis results and historical data
+- **Track Stages**: Visual progress through analysis stages
+
+### Real-time Communication
+- **MQTT Integration**: Live communication with Raspberry Pi devices
+- **Status Updates**: Automatic updates when devices change status
+- **Command Sending**: Send start/stop commands to devices
+- **Confirmation Handling**: User confirmation for critical operations
+
+### User Experience
+- **Responsive Design**: Works on desktop and mobile devices
+- **Real-time Logs**: Live console showing system activity
+- **Visual Feedback**: Clear indicators for connection status and progress
+- **Error Handling**: User-friendly error messages and recovery
+
+## Getting Started
+
+### Prerequisites
+- Node.js (version 14 or higher)
+- npm package manager
+- Backend API running (see `ur2-backend-code`)
+- MQTT broker access (HiveMQ Cloud configured)
+
+### Local Development Setup
+
+1. **Install Dependencies**:
+   ```bash
    cd ur2-frontend-code
    npm install
+   ```
+
+2. **Start Development Server**:
+   ```bash
    npm start
+   ```
 
-2. App runs on http://localhost:3000 by default.
+3. **Access Application**:
+   Open [http://localhost:3000](http://localhost:3000) in your browser
 
-MQTT and backend
------------------
-- MQTT broker credentials are in `src/mqtt/mqttservice.jsx` (for testing). Replace with your broker credentials for production.
-- The UI calls the backend endpoints described in `ur2-backend-code/README.md`.
+4. **Verify Connections**:
+   - Check MQTT connection status in the console
+   - Ensure backend API is running on port 5000
+   - Test device communication
 
-Testing without a Pi
---------------------
-- Use the simulator scripts in `ur2-common-code/rpi-to-ui` to publish MQTT messages that mimic Pi stage updates.
-- Or run the simple Python MQTT publisher to send a `waiting_confirmation` message and confirm the UI shows the modal.
+### Production Build
 
+1. **Build for Production**:
+   ```bash
+   npm run build
+   ```
 
+2. **Deploy Build Files**:
+   The `build/` folder contains optimized production files
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## MQTT Communication
+
+### Topics Used
+- **`ur2/test/init`** — Send start commands to devices
+- **`ur2/test/stage`** — Receive status updates from devices
+- **`ur2/test/confirm`** — Send user confirmations to devices
+
+### Message Formats
+```javascript
+// Start command
+{
+  "command": "start",
+  "testId": "unique_test_id",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+
+// Status update
+{
+  "testId": "unique_test_id",
+  "run_status": "running",
+  "run_stage": 2,
+  "cycle": 1
+}
+
+// Confirmation
+{
+  "testId": "unique_test_id",
+  "confirmed": true,
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+## API Integration
+
+### Backend Endpoints Used
+- **POST** `/runs` — Create new test runs
+- **GET** `/runs` — Retrieve all test runs
+- **PUT** `/runs/:testId/status` — Update test status
+
+### Data Flow
+1. **Create Test**: Frontend → Backend API → Database
+2. **Start Test**: Frontend → MQTT → Raspberry Pi
+3. **Status Updates**: Raspberry Pi → MQTT → Frontend
+4. **Results Storage**: Raspberry Pi → Backend API → Database
+
+## User Interface Pages
+
+### Home Page
+- **System Overview**: Current test status and device connections
+- **Quick Actions**: Start new tests or view recent results
+- **System Health**: MQTT connection status and backend connectivity
+
+### Create Test Page
+- **Test Parameters**: Configure test name, operator, and sample size
+- **Device Selection**: Choose which devices to use for the test
+- **Validation**: Ensure all required fields are completed
+
+### Settings Page
+- **MQTT Configuration**: Broker settings and connection parameters
+- **Backend Settings**: API endpoint configuration
+- **Device Management**: Manage connected laboratory devices
+
+## Testing Without Hardware
+
+### Using Simulators
+1. **Run the Fake RPi Simulator**:
+   ```bash
+   cd ur2-common-code/rpi-to-ui
+   python3 new_enhanced_fake_rpi.py
+   ```
+
+2. **Test MQTT Communication**:
+   - The simulator publishes test status updates
+   - Frontend receives and displays updates
+   - Test the complete workflow without physical devices
+
+### Manual Testing
+```bash
+# Send test status update via MQTT
+mosquitto_pub -h broker.hivemq.cloud -t "ur2/test/stage" \
+  -m '{"testId": "test123", "run_status": "running", "run_stage": 2}'
+
+# Send confirmation request
+mosquitto_pub -h broker.hivemq.cloud -t "ur2/test/stage" \
+  -m '{"testId": "test123", "run_status": "waiting_confirmation"}'
+```
 
 ## Available Scripts
 
-In the project directory, you can run:
+### Development
+- **`npm start`** — Start development server with hot reload
+- **`npm test`** — Run test suite
+- **`npm run build`** — Create production build
 
-### `npm start`
+### Production
+- **`npm run build`** — Optimized production build
+- **`npm run eject`** — Eject from Create React App (not recommended)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Configuration
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### MQTT Broker Settings
+Edit `src/mqtt/mqttservice.jsx`:
+```javascript
+// Production broker
+this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
 
-### `npm test`
+// Testing broker  
+this.MQTT_BROKER_URL = '69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud'
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+this.MQTT_USERNAME = "ur2gglab";
+this.MQTT_PASSWORD = "Ur2gglab";
+```
 
-### `npm run build`
+### Backend API Settings
+The frontend expects the backend API to be running on `http://localhost:5000` by default. Update API calls in components if using different endpoints.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Troubleshooting
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Common Issues
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. **MQTT Connection Failed**:
+   - Check broker URL and credentials
+   - Verify network connectivity
+   - Check firewall settings
 
-### `npm run eject`
+2. **Backend API Errors**:
+   - Ensure backend server is running
+   - Check API endpoint URLs
+   - Verify CORS settings
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+3. **Device Communication Issues**:
+   - Check MQTT topic subscriptions
+   - Verify message formats
+   - Test with simulator first
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Debugging
+- Check browser console for JavaScript errors
+- Monitor MQTT message flow in network tab
+- Use browser developer tools to inspect API calls
+- Check backend logs for server-side issues
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Integration Points
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### With Backend (`ur2-backend-code`)
+- Creates and manages test runs
+- Stores analysis results
+- Provides historical data access
 
-## Learn More
+### With Raspberry Pi (`ur2-common-code`)
+- Sends start commands to devices
+- Receives real-time status updates
+- Handles user confirmations
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### With Laboratory Devices
+- Controls UR2 Experiment equipment
+- Monitors test progress
+- Displays results and alerts
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Security Considerations
 
-### Code Splitting
+### MQTT Security
+- Use secure WebSocket connections (WSS)
+- Implement authentication for production
+- Use encrypted credentials
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### API Security
+- Validate all user inputs
+- Implement rate limiting
+- Use HTTPS in production
 
-### Analyzing the Bundle Size
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
