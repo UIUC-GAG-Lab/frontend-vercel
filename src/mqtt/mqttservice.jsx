@@ -13,17 +13,18 @@ class MQTTService {
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
         this.CONFIRMATION_TOPIC = 'ur2/test/confirm';
-        // prod url
-        // this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
         
-        // testing url
-        this.MQTT_BROKER_URL = '69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud' 
-        
-        this.MQTT_USERNAME = "ur2gglab";
-        this.MQTT_PASSWORD = "Ur2gglab";
+        // MQTT Configuration - will be loaded from backend or env vars
+        this.MQTT_BROKER_URL = null;
+        this.MQTT_USERNAME = null;
+        this.MQTT_PASSWORD = null;
+        this.configLoaded = false;
         
         this.stageUpdateCallback = null; // callback for stage updates
         this.confirmationCallback = null; // callback for confirmation requests
+        
+        // Load configuration on initialization
+        this.loadConfiguration();
     }
 
     generateUniqueClientId() {
@@ -39,8 +40,48 @@ class MQTTService {
         return clientId;
     }
 
+    async loadConfiguration() {
+        try {
+            // First try to load from backend API
+            const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+            const response = await fetch(`${API_BASE_URL}/config/mqtt`);
+            if (response.ok) {
+                const config = await response.json();
+                this.MQTT_BROKER_URL = config.broker;
+                this.MQTT_USERNAME = config.username;
+                this.MQTT_PASSWORD = config.password;
+                this.configLoaded = true;
+                console.log("✅ Loaded MQTT config from backend");
+                return;
+            }
+        } catch (error) {
+            console.warn("⚠️ Could not load config from backend, falling back to environment variables");
+        }
+
+        // Fallback to environment variables
+        this.MQTT_BROKER_URL = process.env.REACT_APP_MQTT_BROKER;
+        this.MQTT_USERNAME = process.env.REACT_APP_MQTT_USERNAME;
+        this.MQTT_PASSWORD = process.env.REACT_APP_MQTT_PASSWORD;
+        this.configLoaded = true;
+
+        if (!this.MQTT_BROKER_URL || !this.MQTT_USERNAME || !this.MQTT_PASSWORD) {
+            console.error("❌ MQTT configuration not found in backend or environment variables");
+        } else {
+            console.log("✅ Loaded MQTT config from environment variables");
+        }
+    }
+
     
-    async connect(brokerUrl = `wss://${this.MQTT_BROKER_URL}:8884/mqtt`, options = {}) {
+    async connect(brokerUrl = null, options = {}) {
+        // Wait for configuration to be loaded
+        if (!this.configLoaded) {
+            await this.loadConfiguration();
+        }
+
+        // Use provided brokerUrl or construct from config
+        if (!brokerUrl) {
+            brokerUrl = `wss://${this.MQTT_BROKER_URL}:8884/mqtt`;
+        }
         // Return existing connection if already connected
         if (this.isConnected && this.client) {
             return this.client;

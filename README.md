@@ -84,15 +84,25 @@ React-based web application that provides an intuitive user interface for creati
    npm install
    ```
 
-2. **Start Development Server**:
+2. **Configure Environment Variables**:
+   Create a `.env` file in the project root with MQTT credentials:
+   ```bash
+   REACT_APP_MQTT_BROKER=04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud
+   REACT_APP_MQTT_USERNAME=ur2gglab
+   REACT_APP_MQTT_PASSWORD=Ur2gglab
+   ```
+   
+   **⚠️ Security Note**: The `.env` file is already in `.gitignore` to prevent committing credentials. For production, consider using a backend MQTT proxy for enhanced security.
+
+3. **Start Development Server**:
    ```bash
    npm start
    ```
 
-3. **Access Application**:
+4. **Access Application**:
    Open [http://localhost:3000](http://localhost:3000) in your browser
 
-4. **Verify Connections**:
+5. **Verify Connections**:
    - Check MQTT connection status in the console
    - Ensure backend API is running on port 5000
    - Test device communication
@@ -208,17 +218,21 @@ mosquitto_pub -h broker.hivemq.cloud -t "ur2/test/stage" \
 ## Configuration
 
 ### MQTT Broker Settings
-Edit `src/mqtt/mqttservice.jsx`:
-```javascript
-// Production broker
-this.MQTT_BROKER_URL = '04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud'
+MQTT credentials are now configured via environment variables in your `.env` file:
 
-// Testing broker  
-this.MQTT_BROKER_URL = '69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud'
-
-this.MQTT_USERNAME = "ur2gglab";
-this.MQTT_PASSWORD = "Ur2gglab";
+```bash
+REACT_APP_MQTT_BROKER=04e8fe793a8947ad8eda947204522088.s1.eu.hivemq.cloud
+REACT_APP_MQTT_USERNAME=ur2gglab
+REACT_APP_MQTT_PASSWORD=Ur2gglab
 ```
+
+For testing with an alternative broker, update the `REACT_APP_MQTT_BROKER` value:
+```bash
+# Testing broker
+REACT_APP_MQTT_BROKER=69fd2157960d4f39950410b17ba9d85c.s1.eu.hivemq.cloud
+```
+
+**Note**: Environment variables starting with `REACT_APP_` are automatically loaded by Create React App during build.
 
 ### Backend API Settings
 The frontend expects the backend API to be running on `http://localhost:5000` by default. Update API calls in components if using different endpoints.

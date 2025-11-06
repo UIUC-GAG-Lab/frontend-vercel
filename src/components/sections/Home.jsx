@@ -7,6 +7,8 @@ import ConfirmationModal from '../ui/ConfirmationModal';
 import mqttService from '../../mqtt/mqttservice';
 import ProcessModalNew from '../ui/ProcessModalNew';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
 export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Function to update run status in database
   const updateRunStatus = async (testId, run_status, run_stage) => {
     try {
-      const response = await fetch(`http://localhost:5000/runs/${testId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/runs/${testId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -225,7 +227,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5000/runs');
+      const response = await fetch(`${API_BASE_URL}/runs`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

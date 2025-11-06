@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, FileText, Hash, RotateCcw, Send } from 'lucide-react';
 import mqttService from '../../mqtt/mqttservice';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+
 export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttConnectedProp }) {
   const [formData, setFormData] = useState({
     trialName: '',
@@ -92,21 +94,17 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
     setIsSubmitting(true);
     
     try {
-      const response = await fetch('http://localhost:5000/runs', {
+      const response = await fetch(`${API_BASE_URL}/runs`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          trial_name: formData.trialName.trim(),
-          trial_operator: formData.userName.trim(),
-          sample_size: parseFloat(formData.sampleSize),
-          cement_added: formData.cementAdded,
-          syringe_filters_swapped: formData.syringeFiltersSwapped,
-        }),
-      });
-
-      if (response.ok) {
+          trial_name: formData.trialName,
+          trial_operator: formData.userName,
+          sample_size: parseInt(formData.sampleSize)
+        })
+      });      if (response.ok) {
         const result = await response.json();
         addLog && addLog(`Test created successfully: ${formData.trial_name} (ID: ${result.trial_id || 'N/A'})`);
         
