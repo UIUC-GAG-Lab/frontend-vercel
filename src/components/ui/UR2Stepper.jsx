@@ -134,7 +134,7 @@ export default function UR2Stepper({
                   >
                   <span style={{ fontSize: 14, whiteSpace: "pre-line" }}>
                     {
-                      title=="Image Capture" ? "Aluminum Image\nCapture": title
+                      title==="Image Capture" ? "Aluminum Image\nCapture": title
                     }
                   </span>
                   <span

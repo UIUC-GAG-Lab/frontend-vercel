@@ -49,7 +49,7 @@ const MQTTSettings = () => {
             });
 
             if (response.ok) {
-                const result = await response.json();
+                await response.json();
                 setMessage('✅ MQTT configuration updated successfully! Please refresh the page for changes to take effect.');
             } else {
                 const error = await response.json();

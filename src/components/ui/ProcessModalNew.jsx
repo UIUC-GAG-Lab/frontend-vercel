@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import mqttService from '../../mqtt/mqttservice';
-import { X, Check } from 'lucide-react';
+import { X } from 'lucide-react';
 import UR2Stepper from './UR2Stepper';
 
 const IMAGE_TOPIC = 'ur2/test/image';
@@ -82,7 +82,7 @@ const ProcessModal = ({
       if (siliconImageUrl) URL.revokeObjectURL(siliconImageUrl);
     };
     // only resub when modal opens/closes or connection changes
-  }, [isOpen, mqttService?.isConnected]);
+  }, [isOpen, aluminumImageUrl, siliconImageUrl]);
 
   if (!isOpen) return null;
 

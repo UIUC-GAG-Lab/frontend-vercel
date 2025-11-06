@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, FileText, RefreshCw } from 'lucide-react';
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
-import ProcessModal from '../ui/ProcessModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import mqttService from '../../mqtt/mqttservice';
 import ProcessModalNew from '../ui/ProcessModalNew';
@@ -38,7 +37,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
 
 
   // Function to update run status in database
-  const updateRunStatus = async (testId, run_status, run_stage) => {
+  const updateRunStatus = useCallback(async (testId, run_status, run_stage) => {
     try {
       const response = await fetch(`${API_BASE_URL}/runs/${testId}/status`, {
         method: 'PUT',
@@ -60,7 +59,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       addLog && addLog(`Error updating run status for test ${testId}: ${error.message}`);
       return false;
     }
-  };
+  }, [addLog]);
 
   ////////////////////////////////////////////////////////////////////////////////
   // Update MQTT connection status when prop changes
@@ -193,7 +192,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       setShowConfirmationModal(true);
       addLog && addLog(`Confirmation required for test ${testId}: ${message}`);
     });
-  }, [activeTestId, showProcessModal, processStages.length, addLog]);
+  }, [activeTestId, showProcessModal, processStages.length, addLog, updateRunStatus]);
 
   // Handle confirmation response
   const handleConfirmation = (confirmed) => {
