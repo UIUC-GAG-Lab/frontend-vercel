@@ -13,6 +13,7 @@ class MQTTService {
         this.TEST_PUB_TOPIC = 'ur2/test/init';
         this.TEST_SUB_TOPIC = 'ur2/test/stage';
         this.CONFIRMATION_TOPIC = 'ur2/test/confirm';
+        this.IMAGE_TOPIC = 'ur2/test/image';
         
         // MQTT Configuration - will be loaded from backend or env vars
         this.MQTT_BROKER_URL = null;
@@ -22,6 +23,7 @@ class MQTTService {
         
         this.stageUpdateCallback = null; // callback for stage updates
         this.confirmationCallback = null; // callback for confirmation requests
+        this.imageCallback = null; // callback for image data
         
         // Load configuration on initialization
         this.loadConfiguration();
@@ -162,6 +164,22 @@ class MQTTService {
                 console.log("Subscribed to topic:", this.TEST_SUB_TOPIC);
             }
         });
+
+        this.client.subscribe(this.IMAGE_TOPIC, (err) => {
+            if (err) {
+                console.error("Failed to subscribe to image topic:", err);
+            }else{
+                console.log("Subscribed to image topic:", this.IMAGE_TOPIC);
+            }
+        });
+
+        this.client.subscribe(this.IMAGE_TOPIC + '/raw', (err) => {
+            if (err) {
+                console.error("Failed to subscribe to image raw topic:", err);
+            }else{
+                console.log("Subscribed to image raw topic:", this.IMAGE_TOPIC + '/raw');
+            }
+        });
     }
 
     handleMessage(topic, message) {
@@ -186,6 +204,23 @@ class MQTTService {
                 
             }catch(e){
                 console.log("Non-JSON message from RPI:", message);
+            }
+        } else if (topic === this.IMAGE_TOPIC) {
+            // Handle image metadata
+            try {
+                const imageData = JSON.parse(message);
+                console.log("Received image metadata:", imageData);
+                if (this.imageCallback) {
+                    this.imageCallback(imageData, null);
+                }
+            } catch(e) {
+                console.error("Failed to parse image metadata:", e);
+            }
+        } else if (topic === this.IMAGE_TOPIC + '/raw') {
+            // Handle raw image bytes
+            console.log("Received raw image bytes:", message.length, "bytes");
+            if (this.imageCallback) {
+                this.imageCallback(null, message);
             }
         }
     }
@@ -234,6 +269,11 @@ class MQTTService {
     // Set callback for confirmation requests
     setConfirmationCallback(callback) {
         this.confirmationCallback = callback;
+    }
+
+    // Set callback for image data
+    setImageCallback(callback) {
+        this.imageCallback = callback;
     }
 
     disconnect() {
