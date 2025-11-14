@@ -341,6 +341,41 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     fetchRuns();
   };
 
+  const handleDelete = async (run) => {
+    if (!window.confirm(`Are you sure you want to delete "${run.trial_name}"? This cannot be undone.`)) {
+      return;
+    }
+
+    addLog && addLog(`Deleting test: ${run.trial_name} (${run.trial_id})`);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      addLog && addLog(`Successfully deleted test: ${run.trial_name}`);
+      
+      // Remove from local state
+      setRuns(prevRuns => prevRuns.filter(r => r.trial_id !== run.trial_id));
+      
+      // Remove from active tests if it was active
+      setActiveTests(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(run.trial_id);
+        return newMap;
+      });
+
+    } catch (error) {
+      console.error('Error deleting run:', error);
+      addLog && addLog(`Error deleting test: ${error.message}`);
+      alert(`Failed to delete test: ${error.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -410,6 +445,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
               onView={handleView}
               onRerun={handleRerun}
               onStatus={handleStatus}
+              onDelete={handleDelete}
               isActive={activeTests.has(run.trial_id)}
               currentStage={activeTests.get(run.trial_id)?.currentStage}
             />

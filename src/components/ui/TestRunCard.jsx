@@ -1,7 +1,7 @@
 import React from 'react';
-import { Play, Eye, Clock, User, Calendar, Activity } from 'lucide-react';
+import { Play, Eye, Clock, User, Calendar, Activity, Trash2 } from 'lucide-react';
 
-export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, currentStage }) {
+export default function TestRunCard({ run, onView, onRerun, onStatus, onDelete, isActive, currentStage }) {
   const getStatusDisplay = (status) => {
     switch (status?.toLowerCase()) {
       case 'completed':
@@ -104,6 +104,13 @@ export default function TestRunCard({ run, onView, onRerun, onStatus, isActive, 
           >
             <Play className="w-4 h-4 mr-1" />
             Rerun
+          </button>
+          <button
+            onClick={() => onDelete(run)}
+            className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center justify-center"
+            title="Delete test"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
