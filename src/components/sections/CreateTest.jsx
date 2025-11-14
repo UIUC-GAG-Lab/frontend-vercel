@@ -10,7 +10,8 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
     userName: '',
     sampleSize: '',
     cementAdded: false,
-    syringeFiltersSwapped: false
+    syringeFiltersSwapped: false,
+    debugMode: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
@@ -110,9 +111,9 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
         
         // Send start command via MQTT if connected
         if (mqttConnected && result.trial_id) {
-          const success = mqttService.sendStartCommand(result.trial_id);
+          const success = mqttService.sendStartCommand(result.trial_id, formData.debugMode);
           if (success) {
-            addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}`);
+            addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}${formData.debugMode ? ' (DEBUG MODE)' : ''}`);
             
             // Navigate to dashboard and show process modal
             setActivePage && setActivePage('home');
@@ -122,7 +123,8 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
             window.activeTestInfo = {
               testId: result.trial_id,
               trialName: formData.trialName,
-              showProcessModal: true
+              showProcessModal: true,
+              debugMode: formData.debugMode
             };
           } else {
             addLog && addLog(`Failed to send start command`);
@@ -154,7 +156,8 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
       userName: '',
       sampleSize: '',
       cementAdded: false,
-      syringeFiltersSwapped: false
+      syringeFiltersSwapped: false,
+      debugMode: false
     });
     setErrors({});
     addLog && addLog('Form reset successfully');
@@ -290,6 +293,26 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
             {errors.syringeFiltersSwapped && (
               <p className="mt-1 text-sm text-red-600">{errors.syringeFiltersSwapped}</p>
             )}
+          </div>
+
+          {/* Debug Mode Checkbox */}
+          <div className="border-t pt-4">
+            <label className="flex items-start">
+              <input
+                type="checkbox"
+                checked={formData.debugMode}
+                onChange={(e) => handleInputChange('debugMode', e.target.checked)}
+                disabled={isSubmitting}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+              />
+              <div className="ml-2">
+                <span className="text-sm font-medium text-gray-700">Debug Mode (Testing Only)</span>
+                <p className="text-xs text-gray-500 mt-1">
+                  Enable this to run a simulated test using pre-captured images. 
+                  The system will automatically continue through all cycles without real hardware.
+                </p>
+              </div>
+            </label>
           </div>
         </div>
 

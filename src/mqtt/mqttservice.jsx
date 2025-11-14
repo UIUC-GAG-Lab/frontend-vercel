@@ -207,10 +207,11 @@ class MQTTService {
         return true;
     }
 
-    sendStartCommand(testId) {
+    sendStartCommand(testId, debugMode = false) {
         const payload = JSON.stringify({ 
             command: "start",  
             testId: testId,
+            debugMode: debugMode,
             timestamp: new Date().toISOString()
         });
         return this.publish(this.TEST_PUB_TOPIC, payload);
