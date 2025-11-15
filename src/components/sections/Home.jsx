@@ -26,10 +26,9 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   
   const [processStages] = useState([
     'Sample Preparation',
+    'Heat & Stirring',
     'Dissolution',
     'Filtration & Dilution',
-    // 'Color Agent Addition',
-    // 'Image Capture'
     'Aluminum Concentration Analysis',
     'Silicon Concentration Analysis',
   ]);
