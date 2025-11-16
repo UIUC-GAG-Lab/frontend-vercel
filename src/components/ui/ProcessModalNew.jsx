@@ -27,6 +27,7 @@ const ProcessModal = ({
   const [stirringConfirmed, setStirringConfirmed] = useState(false);
   const [waitStartTime, setWaitStartTime] = useState(null);
   const [remainingTime, setRemainingTime] = useState(600); // 10 minutes in seconds
+  const [waitSkipped, setWaitSkipped] = useState(false);
 
   // Handle heating confirmation
   const handleHeatConfirmed = () => {
@@ -44,6 +45,7 @@ const ProcessModal = ({
   const handleStirringConfirmed = () => {
     setStirringConfirmed(true);
     setWaitStartTime(Date.now());
+    setWaitSkipped(false); // Reset skip flag
     // Send MQTT message to backend/fake RPI
     if (mqttService?.client?.connected) {
       mqttService.client.publish('ur2/manual/stirring_confirmed', JSON.stringify({
@@ -56,7 +58,9 @@ const ProcessModal = ({
 
   // Handle skip wait (debug feature)
   const handleSkipWait = () => {
+    setWaitSkipped(true);
     setRemainingTime(0);
+    setWaitStartTime(null); // Stop the countdown
     // Notify backend to skip wait
     if (mqttService?.client?.connected) {
       mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
@@ -68,7 +72,7 @@ const ProcessModal = ({
 
   // Countdown timer for 10-minute wait
   useEffect(() => {
-    if (!waitStartTime) return;
+    if (!waitStartTime || waitSkipped) return;
 
     const interval = setInterval(() => {
       const elapsed = Math.floor((Date.now() - waitStartTime) / 1000);
@@ -77,6 +81,7 @@ const ProcessModal = ({
 
       if (remaining === 0) {
         clearInterval(interval);
+        setWaitStartTime(null);
         // Optionally notify backend that wait is complete
         if (mqttService?.client?.connected) {
           mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
@@ -87,7 +92,7 @@ const ProcessModal = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [waitStartTime]);
+  }, [waitStartTime, waitSkipped]);
 
   // Update viewing stage when current stage changes
   useEffect(() => {
