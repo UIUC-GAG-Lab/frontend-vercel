@@ -54,6 +54,18 @@ const ProcessModal = ({
     }
   };
 
+  // Handle skip wait (debug feature)
+  const handleSkipWait = () => {
+    setRemainingTime(0);
+    // Notify backend to skip wait
+    if (mqttService?.client?.connected) {
+      mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        skipped: true
+      }));
+    }
+  };
+
   // Countdown timer for 10-minute wait
   useEffect(() => {
     if (!waitStartTime) return;
@@ -152,9 +164,12 @@ const ProcessModal = ({
   const isComplete = currentStage >= total;
   const pct = Math.max(0, Math.min(100, Math.round(isComplete ? 100 : rawPct)));
 
-  // Get current stage name for manual instructions
-  const currentStageName = stages?.[viewingStage] || '';
+  // Check if current stage (not viewing stage) is Heat & Stirring
+  const currentStageName = stages?.[currentStage] || '';
   const isHeatStage = currentStageName === 'Heat & Stirring';
+  
+  // Get viewing stage name for display
+  const viewingStageName = stages?.[viewingStage] || '';
   
   // Navigation handlers
   const canGoBack = viewingStage > 0;
@@ -221,7 +236,7 @@ const ProcessModal = ({
           </button>
           
           <div className="text-sm text-gray-600">
-            Viewing: <span className="font-semibold">{stages?.[viewingStage] || 'N/A'}</span>
+            Viewing: <span className="font-semibold">{viewingStageName || 'N/A'}</span>
             {viewingStage !== currentStage && (
               <span className="ml-2 text-xs text-blue-600">(History)</span>
             )}
@@ -244,19 +259,24 @@ const ProcessModal = ({
         {/* Main Content */}
         <div className="flex-1 p-6 min-h-0">
           
-          {/* Manual Instructions for Heat & Stirring Stage */}
-          {isHeatStage && viewingStage === currentStage && !isComplete && (
+          {/* Manual Instructions for Heat & Stirring Stage - Always show when in this stage */}
+          {isHeatStage && !isComplete && (
             <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-              <h3 className="text-lg font-semibold text-blue-900 mb-3">Manual Instructions Required</h3>
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">
+                ⚠️ Manual Instructions Required - Heat & Stirring Stage
+              </h3>
               
               {!heatConfirmed && (
-                <div className="mb-4">
-                  <p className="text-sm text-blue-800 mb-2">
-                    <strong>Step 1:</strong> Heat the NaOH solution to 90°C
+                <div className="mb-4 p-3 bg-white rounded border border-blue-300">
+                  <p className="text-sm text-blue-800 mb-3">
+                    <strong>Step 1: Heat the Solution</strong>
+                  </p>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Please heat the NaOH solution to <strong>90°C</strong> before proceeding.
                   </p>
                   <button
                     onClick={handleHeatConfirmed}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors shadow-sm"
                   >
                     ✓ Heating Complete (90°C Reached)
                   </button>
@@ -264,39 +284,59 @@ const ProcessModal = ({
               )}
               
               {heatConfirmed && !stirringConfirmed && (
-                <div className="mb-4">
+                <div className="mb-4 p-3 bg-white rounded border border-blue-300">
                   <p className="text-sm text-blue-800 mb-2">
-                    <strong>Step 2:</strong> Add 0.02g of cement into the heated NaOH solution
+                    <strong>Step 2: Add Cement</strong>
+                  </p>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Add <strong>0.02g of cement</strong> into the heated NaOH solution
                   </p>
                   <p className="text-sm text-blue-800 mb-2">
-                    <strong>Step 3:</strong> Start stirring until reaching 0.56 rpm
+                    <strong>Step 3: Start Stirring</strong>
                   </p>
-                  <p className="text-xs text-blue-700 mb-3">
-                    ⏱️ System will wait 10 minutes after stirring starts
+                  <p className="text-xs text-gray-600 mb-3">
+                    Start stirring until reaching <strong>0.56 rpm</strong>
+                  </p>
+                  <p className="text-xs text-amber-700 mb-3 flex items-center gap-1">
+                    <span>⏱️</span> After confirming, the system will wait <strong>10 minutes</strong> for dissolution
                   </p>
                   <button
                     onClick={handleStirringConfirmed}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors shadow-sm"
                   >
-                    ✓ Stirring Started (0.56 rpm)
+                    ✓ Cement Added & Stirring Started (0.56 rpm)
                   </button>
                 </div>
               )}
               
               {heatConfirmed && stirringConfirmed && (
-                <div className="mb-4 text-center">
-                  <div className="inline-flex flex-col items-center gap-2">
+                <div className="mb-4 p-4 bg-white rounded border border-green-300">
+                  <div className="flex flex-col items-center gap-3">
                     <div className="flex items-center gap-2 text-green-700">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-700"></div>
-                      <span className="text-sm font-medium">Waiting for dissolution...</span>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-700"></div>
+                      <span className="text-sm font-medium">Waiting for dissolution to complete...</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-800">
+                    <div className="text-4xl font-bold text-green-800 tabular-nums">
                       {Math.floor(remainingTime / 60)}:{String(remainingTime % 60).padStart(2, '0')}
                     </div>
-                    <p className="text-xs text-green-600">minutes remaining</p>
+                    <p className="text-xs text-green-600">Time remaining (minutes:seconds)</p>
+                    
+                    {/* Skip button for testing/debug */}
+                    {remainingTime > 0 && (
+                      <button
+                        onClick={handleSkipWait}
+                        className="mt-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium rounded-md transition-colors"
+                      >
+                        ⚡ Skip Wait (Debug)
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
+              
+              <div className="text-xs text-gray-500 mt-2 text-center">
+                💡 The process will continue automatically once all steps are completed
+              </div>
             </div>
           )}
           
