@@ -5,6 +5,8 @@ import UR2Stepper from './UR2Stepper';
 
 const IMAGE_TOPIC = 'ur2/test/image';
 const IMAGE_RAW_TOPIC = 'ur2/test/image/raw';
+const CAMERA_TRIGGER_TOPIC = 'ur2/camera/trigger';
+const CAMERA_READY_TOPIC = 'ur2/camera/ready';
 
 // Add isInterrupted prop to control UI when process is stopped by user
 const ProcessModal = ({
@@ -28,6 +30,10 @@ const ProcessModal = ({
   const [waitStartTime, setWaitStartTime] = useState(null);
   const [remainingTime, setRemainingTime] = useState(600); // 10 minutes in seconds
   const [waitSkipped, setWaitSkipped] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [currentCameraCapture, setCurrentCameraCapture] = useState(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Handle heating confirmation
   const handleHeatConfirmed = () => {
@@ -69,6 +75,105 @@ const ProcessModal = ({
       }));
     }
   };
+
+  // Handle camera capture
+  const handleCameraCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Could not access camera. Please check permissions.');
+    }
+  };
+
+  const capturePicture = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw video frame to canvas
+      context.drawImage(video, 0, 0);
+      
+      // Convert canvas to blob and send via MQTT
+      canvas.toBlob((blob) => {
+        if (blob && currentCameraCapture) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const arrayBuffer = reader.result;
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Send image metadata
+            mqttService.client.publish(IMAGE_TOPIC, JSON.stringify({
+              testId: currentCameraCapture.testId,
+              cycle: currentCameraCapture.cycle,
+              timestamp: new Date().toISOString(),
+              source: 'camera'
+            }));
+            
+            // Send image data
+            mqttService.client.publish(IMAGE_RAW_TOPIC, uint8Array);
+            
+            // Confirm capture complete
+            mqttService.client.publish(CAMERA_READY_TOPIC, JSON.stringify({
+              testId: currentCameraCapture.testId,
+              cycle: currentCameraCapture.cycle,
+              timestamp: new Date().toISOString()
+            }));
+          };
+          reader.readAsArrayBuffer(blob);
+        }
+        
+        // Stop video stream
+        const stream = videoRef.current?.srcObject;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Close modal
+        setShowCameraModal(false);
+        setCurrentCameraCapture(null);
+      }, 'image/png');
+    }
+  };
+
+  // Listen for camera trigger from backend
+  useEffect(() => {
+    if (!isOpen || !mqttService?.isConnected || !mqttService?.client) return;
+
+    const handleCameraTrigger = (topic, message) => {
+      if (topic === CAMERA_TRIGGER_TOPIC) {
+        try {
+          const data = JSON.parse(message.toString());
+          setCurrentCameraCapture({
+            testId: data.testId,
+            cycle: data.cycle
+          });
+          setShowCameraModal(true);
+          // Delay to let modal render before starting camera
+          setTimeout(() => handleCameraCapture(), 100);
+        } catch (error) {
+          console.error('Error handling camera trigger:', error);
+        }
+      }
+    };
+
+    mqttService.client.subscribe(CAMERA_TRIGGER_TOPIC);
+    mqttService.client.on('message', handleCameraTrigger);
+
+    return () => {
+      mqttService.client.removeListener('message', handleCameraTrigger);
+    };
+  }, [isOpen]);
 
   // Countdown timer for 10-minute wait
   useEffect(() => {
@@ -473,6 +578,46 @@ const ProcessModal = ({
         </div>
 
       </div>
+
+      {/* Camera Capture Modal */}
+      {showCameraModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+            <h3 className="text-xl font-semibold mb-4">Capture Image - Sample {currentCameraCapture?.cycle}</h3>
+            <div className="relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="w-full rounded-lg mb-4"
+                style={{ maxHeight: '60vh' }}
+              />
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
+            </div>
+            <div className="flex gap-4 justify-end">
+              <button
+                onClick={() => {
+                  const stream = videoRef.current?.srcObject;
+                  if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                  }
+                  setShowCameraModal(false);
+                  setCurrentCameraCapture(null);
+                }}
+                className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={capturePicture}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              >
+                📸 Capture
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
