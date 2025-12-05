@@ -7,6 +7,7 @@ const IMAGE_TOPIC = 'ur2/test/image';
 const IMAGE_RAW_TOPIC = 'ur2/test/image/raw';
 const CAMERA_TRIGGER_TOPIC = 'ur2/camera/trigger';
 const CAMERA_READY_TOPIC = 'ur2/camera/ready';
+const CAMERA_PREVIEW_CONFIRM_TOPIC = 'ur2/camera/preview_confirmed';
 
 // Add isInterrupted prop to control UI when process is stopped by user
 const ProcessModal = ({
@@ -17,7 +18,9 @@ const ProcessModal = ({
   currentCycle = 1,
   title = "Process Running",
   isInterrupted = false,
-  onStageChange
+  onStageChange,
+  waitingCameraPreview = false,
+  activeTestId = null
 }) => {
   const [aluminumImageUrl, setAluminumImageUrl] = useState(null);
   const [siliconImageUrl, setSiliconImageUrl] = useState(null);
@@ -34,6 +37,18 @@ const ProcessModal = ({
   const [currentCameraCapture, setCurrentCameraCapture] = useState(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+
+  // Handle camera preview confirmation (user clicks "Preview Looks Good")
+  const handlePreviewConfirmed = () => {
+    if (mqttService?.client?.connected && activeTestId) {
+      mqttService.client.publish(CAMERA_PREVIEW_CONFIRM_TOPIC, JSON.stringify({
+        testId: activeTestId,
+        cycle: currentCycle,
+        timestamp: new Date().toISOString()
+      }));
+      console.log('📸 Camera preview confirmed - sent to RPI');
+    }
+  };
 
   // Handle heating confirmation
   const handleHeatConfirmed = () => {
@@ -434,6 +449,37 @@ const ProcessModal = ({
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Camera Preview Confirmation - Shows when RPI is displaying camera preview */}
+          {waitingCameraPreview && !isComplete && (
+            <div className="mb-4 p-4 bg-purple-50 border border-purple-300 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                  <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white text-xl">
+                    📷
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-base font-semibold text-purple-900 mb-2">Camera Preview Active</h4>
+                  <p className="text-sm text-purple-800 mb-3">
+                    The camera preview is now displaying on the Raspberry Pi screen. 
+                    When the preview looks good and you're ready to capture, click the button below.
+                  </p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="animate-pulse w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-xs text-purple-700">Preview is live on RPI display...</span>
+                  </div>
+                  <button
+                    onClick={handlePreviewConfirmed}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>✓</span>
+                    <span>Preview Looks Good - Capture Image</span>
+                  </button>
                 </div>
               </div>
             </div>

@@ -23,6 +23,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [confirmationData, setConfirmationData] = useState(null);
   const [activeTestId, setActiveTestId] = useState(null);
   const [currentCycle, setCurrentCycle] = useState(1);
+  const [waitingCameraPreview, setWaitingCameraPreview] = useState(false); // Track camera preview state
   
   const [processStages] = useState([
     'Sample Preparation',
@@ -150,6 +151,9 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       else if (run_status === 'running') { // When a stage from current test is completed
         const stageNumber = parseInt(run_stage);
         
+        // Clear camera preview state when moving to running
+        setWaitingCameraPreview(false);
+        
         // Handle cycle information if provided
         if (data.cycle) {
           setCurrentCycle(data.cycle);
@@ -181,6 +185,21 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         if (activeTestId === testId && showProcessModal) {
           setCurrentProcessStage(stageNumber);
         }
+      }
+      else if (run_status === 'waiting_camera_preview') {
+        // Camera preview is active on RPI, waiting for user confirmation
+        addLog && addLog(`Camera preview active for test ${testId} - waiting for confirmation`);
+        if (activeTestId === testId && showProcessModal) {
+          setWaitingCameraPreview(true);
+          if (data.cycle) {
+            setCurrentCycle(data.cycle);
+          }
+        }
+      }
+      else if (run_status === 'camera_capture') {
+        // Camera captured successfully, clear preview state
+        setWaitingCameraPreview(false);
+        addLog && addLog(`Camera captured image for test ${testId}`);
       }
     });
 
@@ -485,6 +504,8 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
           // Consider interrupted if selectedRun status is failed, error, or stopped
           selectedRun && ["failed", "error", "stopped"].includes((selectedRun.run_status || '').toLowerCase())
         }
+        waitingCameraPreview={waitingCameraPreview}
+        activeTestId={activeTestId}
       />
 
       {/* Confirmation Modal */}
