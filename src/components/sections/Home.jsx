@@ -30,6 +30,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     'Heat & Stirring',
     'Dissolution',
     'Filtration & Dilution',
+    'Camera Capture',
     'Aluminum Concentration Analysis',
     'Silicon Concentration Analysis',
   ]);
