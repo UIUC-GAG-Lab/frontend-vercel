@@ -235,6 +235,7 @@ const ProcessModal = ({
         if (topic === IMAGE_TOPIC) {
           const meta = JSON.parse(message.toString());
           setLatestImageMeta(meta);
+          latestImageMetaRef.current = meta;  // Update ref immediately for raw image handler
           
           // Append data to appropriate result array based on solution_type
           if (meta.solution_type === 'al') {
@@ -242,7 +243,10 @@ const ProcessModal = ({
           } else if (meta.solution_type === 'si') {
             setSiliconResults(prevResults => [...prevResults, meta]);
           }
+          
+          console.log('📷 Received image metadata:', meta);
         } else if (topic === IMAGE_RAW_TOPIC && latestImageMetaRef.current) {
+          console.log('📷 Received raw image, solution_type:', latestImageMetaRef.current.solution_type);
           const blob = new Blob([message], { type: 'image/png' });
           const url = URL.createObjectURL(blob);
           
