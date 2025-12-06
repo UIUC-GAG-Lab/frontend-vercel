@@ -38,15 +38,16 @@ const ProcessModal = ({
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Handle camera preview confirmation (user clicks "Preview Looks Good")
-  const handlePreviewConfirmed = () => {
+  // Handle camera preview confirmation (user selects sample type)
+  const handlePreviewConfirmed = (sampleType) => {
     if (mqttService?.client?.connected && activeTestId) {
       mqttService.client.publish(CAMERA_PREVIEW_CONFIRM_TOPIC, JSON.stringify({
         testId: activeTestId,
         cycle: currentCycle,
+        sampleType: sampleType, // 'al' or 'si'
         timestamp: new Date().toISOString()
       }));
-      console.log('📸 Camera preview confirmed - sent to RPI');
+      console.log(`📸 Camera preview confirmed - ${sampleType} sample - sent to RPI`);
     }
   };
 
@@ -467,19 +468,28 @@ const ProcessModal = ({
                   <h4 className="text-base font-semibold text-purple-900 mb-2">Camera Preview Active</h4>
                   <p className="text-sm text-purple-800 mb-3">
                     The camera preview is now displaying on the Raspberry Pi screen. 
-                    When the preview looks good and you're ready to capture, click the button below.
+                    When the preview looks good, select the sample type to capture:
                   </p>
                   <div className="flex items-center gap-2 mb-3">
                     <div className="animate-pulse w-3 h-3 bg-green-500 rounded-full"></div>
                     <span className="text-xs text-purple-700">Preview is live on RPI display...</span>
                   </div>
-                  <button
-                    onClick={handlePreviewConfirmed}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                  >
-                    <span>✓</span>
-                    <span>Preview Looks Good - Capture Image</span>
-                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handlePreviewConfirmed('al')}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📸</span>
+                      <span>Aluminum Sample</span>
+                    </button>
+                    <button
+                      onClick={() => handlePreviewConfirmed('si')}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>📸</span>
+                      <span>Silicon Sample</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
