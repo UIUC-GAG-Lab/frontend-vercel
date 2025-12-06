@@ -35,19 +35,20 @@ const ProcessModal = ({
   const [waitSkipped, setWaitSkipped] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [currentCameraCapture, setCurrentCameraCapture] = useState(null);
+  const [selectedSampleType, setSelectedSampleType] = useState('al'); // 'al' or 'si'
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Handle camera preview confirmation (user selects sample type)
-  const handlePreviewConfirmed = (sampleType) => {
+  // Handle camera preview confirmation (user clicks confirm after selecting sample type)
+  const handlePreviewConfirmed = () => {
     if (mqttService?.client?.connected && activeTestId) {
       mqttService.client.publish(CAMERA_PREVIEW_CONFIRM_TOPIC, JSON.stringify({
         testId: activeTestId,
         cycle: currentCycle,
-        sampleType: sampleType, // 'al' or 'si'
+        sampleType: selectedSampleType, // 'al' or 'si'
         timestamp: new Date().toISOString()
       }));
-      console.log(`📸 Camera preview confirmed - ${sampleType} sample - sent to RPI`);
+      console.log(`📸 Camera preview confirmed - ${selectedSampleType} sample - sent to RPI`);
     }
   };
 
@@ -468,28 +469,50 @@ const ProcessModal = ({
                   <h4 className="text-base font-semibold text-purple-900 mb-2">Camera Preview Active</h4>
                   <p className="text-sm text-purple-800 mb-3">
                     The camera preview is now displaying on the Raspberry Pi screen. 
-                    When the preview looks good, select the sample type to capture:
+                    Select the sample type and click confirm when the preview looks good.
                   </p>
                   <div className="flex items-center gap-2 mb-3">
                     <div className="animate-pulse w-3 h-3 bg-green-500 rounded-full"></div>
                     <span className="text-xs text-purple-700">Preview is live on RPI display...</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => handlePreviewConfirmed('al')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      <span>📸</span>
-                      <span>Aluminum Sample</span>
-                    </button>
-                    <button
-                      onClick={() => handlePreviewConfirmed('si')}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      <span>📸</span>
-                      <span>Silicon Sample</span>
-                    </button>
+                  
+                  {/* Sample Type Toggle */}
+                  <div className="mb-4 p-3 bg-white rounded-lg border border-purple-200">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">Sample Type:</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedSampleType('al')}
+                        className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          selectedSampleType === 'al'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span>🔵</span>
+                        <span>Aluminum</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedSampleType('si')}
+                        className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                          selectedSampleType === 'si'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span>🟢</span>
+                        <span>Silicon</span>
+                      </button>
+                    </div>
                   </div>
+                  
+                  {/* Confirm Button */}
+                  <button
+                    onClick={handlePreviewConfirmed}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>✓</span>
+                    <span>Preview Looks Good - Capture {selectedSampleType === 'al' ? 'Aluminum' : 'Silicon'} Image</span>
+                  </button>
                 </div>
               </div>
             </div>
