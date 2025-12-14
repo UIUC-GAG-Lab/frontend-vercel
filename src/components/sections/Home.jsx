@@ -24,6 +24,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [activeTestId, setActiveTestId] = useState(null);
   const [currentCycle, setCurrentCycle] = useState(1);
   const [waitingCameraPreview, setWaitingCameraPreview] = useState(false); // Track camera preview state
+  const [testResults, setTestResults] = useState({ aluminum: [], silicon: [] }); // Store real-time results
   
   const [processStages] = useState([
     'Sample Preparation',
@@ -477,7 +478,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
       <TestDetailsModal
         isOpen={showDetailsModal}
         onClose={handleCloseModal}
-        run={selectedRun}
+        run={selectedRun ? { ...selectedRun, results: [...testResults.aluminum, ...testResults.silicon] } : null}
       />
 
       {/* Process Status Modal */}
@@ -507,6 +508,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         }
         waitingCameraPreview={waitingCameraPreview}
         activeTestId={activeTestId}
+        onResultsUpdate={(results) => setTestResults(results)}
       />
 
       {/* Confirmation Modal */}

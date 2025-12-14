@@ -20,7 +20,8 @@ const ProcessModal = ({
   isInterrupted = false,
   onStageChange,
   waitingCameraPreview = false,
-  activeTestId = null
+  activeTestId = null,
+  onResultsUpdate = null  // Callback to pass results to parent
 }) => {
   const [aluminumImageUrl, setAluminumImageUrl] = useState(null);
   const [siliconImageUrl, setSiliconImageUrl] = useState(null);
@@ -239,9 +240,23 @@ const ProcessModal = ({
           
           // Append data to appropriate result array based on solution_type
           if (meta.solution_type === 'al') {
-            setAluminumResults(prevResults => [...prevResults, meta]);
+            setAluminumResults(prevResults => {
+              const newResults = [...prevResults, meta];
+              // Notify parent of updated results
+              if (onResultsUpdate) {
+                onResultsUpdate({ aluminum: newResults, silicon: siliconResults });
+              }
+              return newResults;
+            });
           } else if (meta.solution_type === 'si') {
-            setSiliconResults(prevResults => [...prevResults, meta]);
+            setSiliconResults(prevResults => {
+              const newResults = [...prevResults, meta];
+              // Notify parent of updated results
+              if (onResultsUpdate) {
+                onResultsUpdate({ aluminum: aluminumResults, silicon: newResults });
+              }
+              return newResults;
+            });
           }
           
           console.log('📷 Received image metadata:', meta);
@@ -321,6 +336,48 @@ const ProcessModal = ({
   const handleGoToCurrentStage = () => {
     setViewingStage(currentStage);
   };
+
+  // Export results as JSON
+  const handleExportJSON = () => {
+    const exportData = {
+      testId: activeTestId,
+      exportedAt: new Date().toISOString(),
+      totalSamples: Math.max(aluminumResults.length, siliconResults.length),
+      results: Array.from({ length: Math.max(aluminumResults.length, siliconResults.length) }, (_, index) => ({
+        sample: index + 1,
+        aluminum: aluminumResults[index] || null,
+        silicon: siliconResults[index] || null,
+      })),
+      summary: {
+        aluminum: {
+          count: aluminumResults.length,
+          concentrations: aluminumResults.map(r => r?.concentration).filter(c => c != null),
+          average: aluminumResults.length > 0 
+            ? aluminumResults.reduce((sum, r) => sum + (r?.concentration || 0), 0) / aluminumResults.length 
+            : null,
+        },
+        silicon: {
+          count: siliconResults.length,
+          concentrations: siliconResults.map(r => r?.concentration).filter(c => c != null),
+          average: siliconResults.length > 0 
+            ? siliconResults.reduce((sum, r) => sum + (r?.concentration || 0), 0) / siliconResults.length 
+            : null,
+        }
+      }
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ur2-results-${activeTestId || 'test'}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -527,7 +584,21 @@ const ProcessModal = ({
             
 ```            {/* Concentration Results - Left Side */}
             <div className="flex flex-col min-h-0">
-              <h3 className="text-lg font-medium text-gray-700 mb-4">Concentration Results</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-700">Concentration Results</h3>
+                {(aluminumResults.length > 0 || siliconResults.length > 0) && (
+                  <button
+                    onClick={handleExportJSON}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                    title="Export results as JSON"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export JSON
+                  </button>
+                )}
+              </div>
               <div className="flex-1 min-h-0 overflow-hidden">
                 {Math.max(aluminumResults.length, siliconResults.length) === 0 ? (
                   <div className="text-gray-400 text-sm py-8 text-center">

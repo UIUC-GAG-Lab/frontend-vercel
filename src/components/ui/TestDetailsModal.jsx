@@ -37,31 +37,42 @@ export default function TestDetailsModal({ isOpen, onClose, run }) {
     return formatDate(end);
   };
 
-  // Mock data - in real app, this would come from the API
-  const mockResults = {
-    dissolutionIndex: 1320.5,
-    aluminum: 510,
-    silicon: 530,
-    siAlRatio: 1.04
-  };
-
-  // Prepare CSV data
+  // Prepare CSV data with real results
   const prepareCsvData = () => {
-    return [
+    const rows = [
       ['Category', 'Value'],
       ['Test ID', generateTestId(run)],
       ['Operator', run.trial_operator],
       ['Start Time', formatDate(run.timestamp)],
       ['End Time', calculateEndTime(run.timestamp, run.trial_duration)],
       ['Sample ID', run.trial_name],
-      ['Dissolution Index', `${mockResults.dissolutionIndex.toFixed(1)}`],
-      ['Dissolved Aluminum', `${mockResults.aluminum} μM`],
-      ['Dissolved Silicon', `${mockResults.silicon} μM`],
-      ['Si/Al Ratio', mockResults.siAlRatio.toFixed(2)],
       ['Test Temperature', '90 °C'],
       ['NaOH Concentration', '4 M'],
-      ['Solid-to-liquid ratio', '0.5 g/L']
+      ['Solid-to-liquid ratio', '0.5 g/L'],
+      [],
+      ['Sample Results'],
+      ['Cycle', 'Solution Type', 'Concentration', 'RGB_R', 'RGB_G', 'RGB_B', 'Timestamp', 'Source Image', 'Cropped Cuvette', 'Cropped Analysis']
     ];
+    // Add real results if available
+    if (run && Array.isArray(run.results) && run.results.length > 0) {
+      run.results.forEach((sample, idx) => {
+        rows.push([
+          sample.cycle ?? idx + 1,
+          sample.solution_type ?? '',
+          sample.concentration ?? '',
+          sample.rgb ? sample.rgb[0] : '',
+          sample.rgb ? sample.rgb[1] : '',
+          sample.rgb ? sample.rgb[2] : '',
+          sample.timestamp ? formatDate(sample.timestamp) : '',
+          sample.source_image ?? '',
+          sample.cropped_cuvette ?? '',
+          sample.cropped_analysis ?? ''
+        ]);
+      });
+    } else {
+      rows.push(['No results', '', '', '', '', '', '', '', '', '']);
+    }
+    return rows;
   };
 
   const csvData = prepareCsvData();
