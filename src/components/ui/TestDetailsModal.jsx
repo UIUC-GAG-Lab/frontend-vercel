@@ -78,6 +78,35 @@ export default function TestDetailsModal({ isOpen, onClose, run }) {
   const csvData = prepareCsvData();
   const csvFilename = `UR2_Test_${generateTestId(run)}_${new Date().toISOString().split('T')[0]}.csv`;
 
+  // Compute real results from run.results
+  const computeResults = () => {
+    const results = run?.results || [];
+    const alResults = results.filter(r => r.solution_type === 'al');
+    const siResults = results.filter(r => r.solution_type === 'si');
+    
+    // Average concentration for each type
+    const avgAl = alResults.length > 0 
+      ? alResults.reduce((sum, r) => sum + (r.concentration || 0), 0) / alResults.length 
+      : 0;
+    const avgSi = siResults.length > 0 
+      ? siResults.reduce((sum, r) => sum + (r.concentration || 0), 0) / siResults.length 
+      : 0;
+    
+    // Dissolution index: 1.54 * [Al] + [Si]
+    const dissolutionIndex = 1.54 * avgAl + avgSi;
+    const siAlRatio = avgAl > 0 ? avgSi / avgAl : 0;
+    
+    return {
+      dissolutionIndex,
+      aluminum: avgAl,
+      silicon: avgSi,
+      siAlRatio,
+      hasResults: results.length > 0
+    };
+  };
+  
+  const computedResults = computeResults();
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -142,7 +171,7 @@ export default function TestDetailsModal({ isOpen, onClose, run }) {
             <div className="bg-blue-50 rounded-lg p-4">
               <div className="text-sm text-gray-600 mb-2">Dissolution Index (UR2 Index):</div>
               <div className="text-lg font-semibold text-blue-800">
-                1.54 × [Al] + [Si] = {mockResults.dissolutionIndex.toFixed(1)} 
+                1.54 × [Al] + [Si] = {computedResults.hasResults ? computedResults.dissolutionIndex.toFixed(4) : 'N/A'} 
               </div>
             </div>
           </div>
@@ -153,15 +182,15 @@ export default function TestDetailsModal({ isOpen, onClose, run }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-600 mb-1">Dissolved Aluminum (Al³⁺):</div>
-                <div className="text-lg font-semibold text-gray-900">{mockResults.aluminum} μM</div>
+                <div className="text-lg font-semibold text-gray-900">{computedResults.hasResults ? computedResults.aluminum.toFixed(4) : 'N/A'}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-600 mb-1">Dissolved Silicon (Si⁴⁺):</div>
-                <div className="text-lg font-semibold text-gray-900">{mockResults.silicon} μM</div>
+                <div className="text-lg font-semibold text-gray-900">{computedResults.hasResults ? computedResults.silicon.toFixed(4) : 'N/A'}</div>
               </div>
               <div className="bg-gray-50 rounded-lg p-4 md:col-span-2">
                 <div className="text-sm text-gray-600 mb-1">Si/Al Ratio:</div>
-                <div className="text-lg font-semibold text-gray-900">{mockResults.siAlRatio.toFixed(2)}</div>
+                <div className="text-lg font-semibold text-gray-900">{computedResults.hasResults ? computedResults.siAlRatio.toFixed(4) : 'N/A'}</div>
               </div>
             </div>
           </div>
