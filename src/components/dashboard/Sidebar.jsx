@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, PlusCircle, Settings, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, PlusCircle, Settings, HelpCircle, ChevronLeft, ChevronRight, LogOut, User } from 'lucide-react';
 
-export default function Navbar({ activePage, setActivePage }) {
+export default function Navbar({ activePage, setActivePage, user, onLogout }) {
   const [collapsed, setCollapsed] = React.useState(false);
   const navItems = [
     { name: 'home', icon: <Home />, label: 'Home' },
@@ -15,6 +15,8 @@ export default function Navbar({ activePage, setActivePage }) {
       <button onClick={() => setCollapsed(!collapsed)} className="p-3 text-left">
         {collapsed ? <ChevronRight /> : <ChevronLeft />}
       </button>
+      
+      {/* Navigation Items */}
       {navItems.map((item) => (
         <button
           key={item.name}
@@ -25,6 +27,28 @@ export default function Navbar({ activePage, setActivePage }) {
           {!collapsed && item.label}
         </button>
       ))}
+      
+      {/* Spacer */}
+      <div className="flex-1" />
+      
+      {/* User Info & Logout */}
+      {user && (
+        <div className="border-t border-gray-700">
+          <div className={`p-3 ${collapsed ? 'text-center' : ''}`}>
+            <div className="flex items-center gap-2 text-sm text-gray-300 mb-2">
+              <User size={16} />
+              {!collapsed && <span className="truncate">{user.email}</span>}
+            </div>
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center gap-2 p-2 text-sm text-red-400 hover:bg-gray-800 rounded transition-colors"
+            >
+              <LogOut size={16} />
+              {!collapsed && 'Logout'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
