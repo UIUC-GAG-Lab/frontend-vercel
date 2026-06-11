@@ -15,3 +15,9 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.date-input {
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
+  appearance: auto;
+}
