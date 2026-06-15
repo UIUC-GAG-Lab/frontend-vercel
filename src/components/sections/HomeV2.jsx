@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import TopFilter from '../ui/TopFilter';
-import { Activity, Eye, Copy, Trash2 } from 'lucide-react';
+import { Activity, Eye, Copy, Trash2, StickyNote } from 'lucide-react';
+import TestNotesModal from '../ui/TestNotesModal';
+import RerunModal from '../ui/RerunModal';
 
-function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handleDelete }) {
+function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handleNotes, handleDelete }) {
     // Helper function for colored status badges
     const renderStatusBadge = (status) => {
         const s = (status || 'pending').toLowerCase();
@@ -84,6 +86,9 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                                                 <button onClick={() => handleRerun && handleRerun(run)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md transition-colors" title="Rerun Test">
                                                     <Copy className="w-3.5 h-3.5" />
                                                 </button>
+                                                <button onClick={() => handleNotes && handleNotes(run)} className="p-1.5 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 border border-yellow-100 rounded-md transition-colors" title="Test Notes">
+                                                    <StickyNote className="w-3.5 h-3.5" />
+                                                </button>
                                                 <button onClick={() => handleDelete && handleDelete(run)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors" title="Delete Test">
                                                     <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
@@ -103,6 +108,10 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
 export default function HomeV2({ addLog, mqttConnected }) {
     // 1. Give the component memory to store the database data
     const [runs, setRuns] = useState([]);
+    const [showNotesModal, setShowNotesModal] = useState(false);
+    const [selectedNoteRun, setSelectedNoteRun] = useState(null);
+    const [showRerunModal, setShowRerunModal] = useState(false);
+    const [selectedRerun, setSelectedRerun] = useState(null);
     const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
     // 2. Fetch the real data from PostgreSQL when the page loads
@@ -131,12 +140,33 @@ export default function HomeV2({ addLog, mqttConnected }) {
         addLog && addLog(`Viewing details for: ${run.trial_name}`);
     };
     const handleRerun = (run) => {
-        console.log('Rerun clicked for:', run.trial_name);
-        addLog && addLog(`Rerunning test: ${run.trial_name}`);
+        setSelectedRerun(run);
+        setShowRerunModal(true);
+    };
+    const handleConfirmRerun = async (run, startStage) => {
+        addLog && addLog(`Rerunning test: ${run.trial_name} from stage ${startStage}`);
+        // Similar to Home.jsx, we would call mqttService here
+        // mqttService.sendStartCommand(run.trial_id, startStage);
     };
     const handleDelete = (run) => {
         console.log('Delete clicked for:', run.trial_name);
         addLog && addLog(`Deleting test: ${run.trial_name}`);
+    };
+    const handleNotes = (run) => {
+        setSelectedNoteRun(run);
+        setShowNotesModal(true);
+    };
+
+    const handleCloseNotesModal = () => {
+        setShowNotesModal(false);
+        setSelectedNoteRun(null);
+    };
+
+    const handleSaveNotes = async (testId, notes) => {
+        setRuns(prevRuns => prevRuns.map(r => 
+            r.trial_id === testId ? { ...r, notes } : r
+        ));
+        addLog && addLog(`Notes saved for test ${testId}`);
     };
 
     const handleFilterChange = () => {};
@@ -157,7 +187,22 @@ export default function HomeV2({ addLog, mqttConnected }) {
                 handleStatus={handleStatus} 
                 handleView={handleView} 
                 handleRerun={handleRerun} 
+                handleNotes={handleNotes}
                 handleDelete={handleDelete} 
+            />
+
+            <TestNotesModal
+                isOpen={showNotesModal}
+                onClose={handleCloseNotesModal}
+                run={selectedNoteRun}
+                onSave={handleSaveNotes}
+            />
+
+            <RerunModal
+                isOpen={showRerunModal}
+                onClose={() => setShowRerunModal(false)}
+                run={selectedRerun}
+                onConfirmRerun={handleConfirmRerun}
             />
         </div>
     );

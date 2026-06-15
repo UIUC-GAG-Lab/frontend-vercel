@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, FileText, RefreshCw, Activity, Eye, Copy, Trash2 } from 'lucide-react';
+import { Play, FileText, RefreshCw, Activity, Eye, Copy, Trash2, StickyNote } from 'lucide-react';
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import mqttService from '../../mqtt/mqttservice';
 import ProcessModalNew from '../ui/ProcessModalNew';
+import TestNotesModal from '../ui/TestNotesModal';
+import RerunModal from '../ui/RerunModal';
 import { useUser } from '../../context/UserContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
@@ -17,6 +19,10 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const [selectedRun, setSelectedRun] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showProcessModal, setShowProcessModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [selectedNoteRun, setSelectedNoteRun] = useState(null);
+  const [showRerunModal, setShowRerunModal] = useState(false);
+  const [selectedRerun, setSelectedRerun] = useState(null);
   const [currentProcessStage, setCurrentProcessStage] = useState(0);  
   const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false); // Use prop or default
   const [activeTests, setActiveTests] = useState(new Map()); // Track active tests and their current stages
@@ -378,33 +384,24 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     setShowDetailsModal(true);
   };
 
-  // Updated handleRerun to send MQTT command
-  const handleRerun = async (run) => {
-    addLog && addLog(`Rerunning test: ${run.trial_name} (${run.trial_id})`);
+  // Updated handleRerun to show modal
+  const handleRerun = (run) => {
+    setSelectedRerun(run);
+    setShowRerunModal(true);
+  };
 
-    // // Immediately update UI state to show "started" status
-    // setRuns(prevRuns => 
-    //   prevRuns.map(prevRun => 
-    //     prevRun.trial_id === run.trial_id 
-    //       ? { ...prevRun, run_status: 'started' }
-    //       : prevRun
-    //   )
-    // );s
-
-    // // Update run status to 'started' in database (stage 0 = starting)
-    // await updateRunStatus(run.trial_id, 'started', 0);
+  const handleConfirmRerun = async (run, startStage) => {
+    addLog && addLog(`Rerunning test: ${run.trial_name} (${run.trial_id}) from stage ${startStage}`);
    
     if (mqttConnected) {
-      const success = mqttService.sendStartCommand(run.trial_id);  // Send start command to RPI via MQTT
+      const success = mqttService.sendStartCommand(run.trial_id, startStage);  // Send start command to RPI via MQTT
       if (success) {
-        addLog && addLog(`Sent start command to RPI for test: ${run.trial_id}`);
+        addLog && addLog(`Sent start command to RPI for test: ${run.trial_id} from stage ${startStage}`);
       } else {
         addLog && addLog(`Failed to send start command`);
-        
       }
     } else {
       addLog && addLog(`Cannot start test - MQTT not connected`);
-      
     }
   };
 
@@ -442,6 +439,32 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const handleCloseModal = () => {
     setShowDetailsModal(false);
     setSelectedRun(null);
+  };
+
+  const handleNotes = (run) => {
+    setSelectedNoteRun(run);
+    setShowNotesModal(true);
+  };
+
+  const handleCloseNotesModal = () => {
+    setShowNotesModal(false);
+    setSelectedNoteRun(null);
+  };
+
+  const handleSaveNotes = async (testId, notes) => {
+    // Optimistic update
+    setRuns(prevRuns => prevRuns.map(run => 
+      run.trial_id === testId ? { ...run, notes } : run
+    ));
+    
+    // TODO: Send to backend when endpoint is available
+    // await fetch(`${API_BASE_URL}/runs/${testId}/notes`, {
+    //   method: 'PUT',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({ notes }),
+    // });
+    
+    addLog && addLog(`Notes saved for test ${testId}`);
   };
 
   const handleCloseProcessModal = () => {
@@ -625,6 +648,11 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
                             <Copy className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Notes Button */}
+                          <button onClick={() => handleNotes(run)} className="p-1.5 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 border border-yellow-100 rounded-md transition-colors" title="Test Notes">
+                            <StickyNote className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Delete Button */}
                           <button onClick={() => handleDelete(run)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors" title="Delete Test">
                             <Trash2 className="w-3.5 h-3.5" />
@@ -699,6 +727,14 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         }}
       />
 
+      {/* Notes Modal */}
+      <TestNotesModal
+        isOpen={showNotesModal}
+        onClose={handleCloseNotesModal}
+        run={selectedNoteRun}
+        onSave={handleSaveNotes}
+      />
+
       {/* Confirmation Modal */}
       <ConfirmationModal
         isOpen={showConfirmationModal}
@@ -707,6 +743,14 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         testId={confirmationData?.testId}
         message={confirmationData?.message}
         cycle={confirmationData?.cycle}
+      />
+
+      {/* Rerun Modal */}
+      <RerunModal
+        isOpen={showRerunModal}
+        onClose={() => setShowRerunModal(false)}
+        run={selectedRerun}
+        onConfirmRerun={handleConfirmRerun}
       />
     </div>
   );

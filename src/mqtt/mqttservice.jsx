@@ -190,7 +190,7 @@ class MQTTService {
         });
     }
 
-    sendStartCommand(testId, debugMode = false) {
+    sendStartCommand(testId, startStage = 0, debugMode = false) {
         if (!this.socket || !this.socketConnected) {
             console.error('Cannot send command, not connected to backend');
             return false;
@@ -198,7 +198,8 @@ class MQTTService {
         
         this.socket.emit('mqtt:startTest', {
             testId: testId,
-            debugMode: debugMode
+            debugMode: debugMode,
+            startStage: startStage
         });
         
         console.log('📤 Sent start command for test:', testId);
