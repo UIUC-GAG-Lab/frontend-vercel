@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TopFilter from '../ui/TopFilter';
-import { Activity, Eye, Copy, Trash2, StickyNote } from 'lucide-react';
+import { Activity, Eye, Copy, Trash2, RefreshCw } from 'lucide-react';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
 
@@ -83,11 +83,25 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                                                     <Eye className="w-3.5 h-3.5" />
                                                     View
                                                 </button>
-                                                <button onClick={() => handleRerun && handleRerun(run)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md transition-colors" title="Rerun Test">
-                                                    <Copy className="w-3.5 h-3.5" />
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRerun(run);
+                                                  }}
+                                                  className="p-2 text-blue-600 bg-blue-50/50 hover:bg-blue-100/50 border border-transparent hover:border-blue-200 rounded-lg transition-all" 
+                                                  title="Rerun Test"
+                                                >
+                                                  <RefreshCw className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleNotes && handleNotes(run)} className="p-1.5 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 border border-yellow-100 rounded-md transition-colors" title="Test Notes">
-                                                    <StickyNote className="w-3.5 h-3.5" />
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleNotes(run);
+                                                  }}
+                                                  className="p-2 text-yellow-600 bg-yellow-50/50 hover:bg-yellow-100/50 border border-transparent hover:border-yellow-200 rounded-lg transition-all" 
+                                                  title="Test Notes"
+                                                >
+                                                  <Copy className="w-4 h-4" />
                                                 </button>
                                                 <button onClick={() => handleDelete && handleDelete(run)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors" title="Delete Test">
                                                     <Trash2 className="w-3.5 h-3.5" />

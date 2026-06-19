@@ -35,7 +35,7 @@ export default function RerunModal({ isOpen, onClose, run, onConfirmRerun }) {
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
@@ -55,25 +55,69 @@ export default function RerunModal({ isOpen, onClose, run, onConfirmRerun }) {
             Select the stage from which you would like to resume the test. Make sure the physical environment (samples, containers) is prepared for the selected stage.
           </p>
           
-          <div className="space-y-3">
-            {PROCESS_STAGES.map((stage) => (
-              <label 
-                key={stage.id} 
-                className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedStage === stage.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
-              >
-                <input
-                  type="radio"
-                  name="rerunStage"
-                  value={stage.id}
-                  checked={selectedStage === stage.id}
-                  onChange={() => setSelectedStage(stage.id)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <span className="ml-3 text-sm font-medium text-gray-900">
-                  {stage.name}
-                </span>
-              </label>
-            ))}
+          <div className="flex items-center justify-center my-8 overflow-x-auto p-4">
+            <div className="flex items-center space-x-4">
+              {PROCESS_STAGES.map((stage, index) => {
+                const isSelected = selectedStage === stage.id;
+                const isBeforeSelected = stage.id < selectedStage;
+                const isLast = index === PROCESS_STAGES.length - 1;
+
+                // Extract short name
+                const shortName = stage.name.split(':')[1]?.trim() || stage.name;
+
+                return (
+                  <div key={stage.id} className="flex items-center">
+                    {/* Stage Item */}
+                    <div 
+                      className="flex flex-col items-center text-center cursor-pointer group"
+                      onClick={() => setSelectedStage(stage.id)}
+                    >
+                      {/* Icon Container */}
+                      <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
+                        isSelected ? 'bg-blue-100 border-blue-500 ring-4 ring-blue-50' :
+                        isBeforeSelected ? 'bg-gray-100 border-gray-300 opacity-60' :
+                        'bg-white border-gray-300 hover:border-blue-300'
+                      }`}>
+                        <div className={`w-3 h-3 rounded-full transition-colors ${
+                          isSelected ? 'bg-blue-600' : 
+                          isBeforeSelected ? 'bg-gray-400' : 
+                          'bg-gray-300 group-hover:bg-blue-400'
+                        }`}></div>
+                      </div>
+                      
+                      {/* Stage Info */}
+                      <div className="mt-2 w-24">
+                        <div className={`text-xs font-medium transition-colors ${
+                          isSelected ? 'text-blue-600' :
+                          isBeforeSelected ? 'text-gray-400' :
+                          'text-gray-500 group-hover:text-blue-500'
+                        }`}>
+                          Stage {stage.id}
+                        </div>
+                        <div className={`text-xs capitalize mt-1 leading-tight transition-colors ${
+                          isSelected ? 'text-blue-800 font-medium' :
+                          isBeforeSelected ? 'text-gray-400' :
+                          'text-gray-600 group-hover:text-gray-900'
+                        }`}>
+                          {shortName}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1 h-4">
+                          {isSelected && 'Resume Here'}
+                          {isBeforeSelected && 'Skip'}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Connector Line */}
+                    {!isLast && (
+                      <div className="w-12 h-0.5 mx-3">
+                        <div className={`w-full h-full transition-all duration-300 ${isBeforeSelected ? 'bg-gray-200' : 'bg-blue-200'}`}></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

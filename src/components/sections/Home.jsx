@@ -643,14 +643,14 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
                             View
                           </button>
 
-                          {/* Rerun/Copy Button */}
+                          {/* Rerun Button */}
                           <button onClick={() => handleRerun(run)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md transition-colors" title="Rerun Test">
-                            <Copy className="w-3.5 h-3.5" />
+                            <RefreshCw className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Notes Button */}
                           <button onClick={() => handleNotes(run)} className="p-1.5 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 border border-yellow-100 rounded-md transition-colors" title="Test Notes">
-                            <StickyNote className="w-3.5 h-3.5" />
+                            <Copy className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Delete Button */}
