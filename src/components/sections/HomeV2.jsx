@@ -3,6 +3,8 @@ import TopFilter from '../ui/TopFilter';
 import { Activity, Eye, Copy, Trash2, RefreshCw } from 'lucide-react';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
+import TestDetailsModal from '../ui/TestDetailsModal';
+import ProcessModalNew from '../ui/ProcessModalNew';
 
 function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handleNotes, handleDelete }) {
     // Helper function for colored status badges
@@ -126,6 +128,21 @@ export default function HomeV2({ addLog, mqttConnected }) {
     const [selectedNoteRun, setSelectedNoteRun] = useState(null);
     const [showRerunModal, setShowRerunModal] = useState(false);
     const [selectedRerun, setSelectedRerun] = useState(null);
+    
+    // States for View and Status modals
+    const [selectedRun, setSelectedRun] = useState(null);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [showProcessModal, setShowProcessModal] = useState(false);
+    const [currentProcessStage, setCurrentProcessStage] = useState(0);
+    const [processStages] = useState([
+        'NaOH Transfer',
+        'Preparation',
+        'Transfer',
+        'Aluminum',
+        'Silicon',
+    ]);
+    const [testResults, setTestResults] = useState({ aluminum: [], silicon: [], dissolution: [] });
+
     const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
     // 2. Fetch the real data from PostgreSQL when the page loads
@@ -148,11 +165,44 @@ export default function HomeV2({ addLog, mqttConnected }) {
     const handleStatus = (run) => {
         console.log('Status clicked for:', run.trial_name);
         addLog && addLog(`Viewing status for: ${run.trial_name}`);
+        setSelectedRun(run);
+        
+        switch (run.run_status?.toLowerCase()) {
+            case 'completed':
+                setCurrentProcessStage(processStages.length);
+                break;
+            case 'running':
+                setCurrentProcessStage(2);
+                break;
+            case 'failed':
+            case 'error':
+            case 'stopped':
+                setCurrentProcessStage(1);
+                break;
+            default:
+                setCurrentProcessStage(0);
+        }
+        setShowProcessModal(true);
     };
+    
     const handleView = (run) => {
         console.log('View clicked for:', run.trial_name);
         addLog && addLog(`Viewing details for: ${run.trial_name}`);
+        setSelectedRun(run);
+        setShowDetailsModal(true);
     };
+    
+    const handleCloseProcessModal = () => {
+        setShowProcessModal(false);
+        setSelectedRun(null);
+        setCurrentProcessStage(0);
+    };
+
+    const handleCloseDetailsModal = () => {
+        setShowDetailsModal(false);
+        setSelectedRun(null);
+    };
+
     const handleRerun = (run) => {
         setSelectedRerun(run);
         setShowRerunModal(true);
@@ -217,6 +267,26 @@ export default function HomeV2({ addLog, mqttConnected }) {
                 onClose={() => setShowRerunModal(false)}
                 run={selectedRerun}
                 onConfirmRerun={handleConfirmRerun}
+            />
+
+            <TestDetailsModal
+                isOpen={showDetailsModal}
+                onClose={handleCloseDetailsModal}
+                run={selectedRun ? { ...selectedRun, results: selectedRun.results || testResults } : null}
+            />
+
+            <ProcessModalNew
+                isOpen={showProcessModal}
+                onClose={handleCloseProcessModal}
+                currentStage={currentProcessStage}
+                currentCycle={1}
+                stages={processStages}
+                title={selectedRun ? `Test Status - ${selectedRun.trial_name}` : "Test Status"}
+                isInterrupted={selectedRun && ["failed", "error", "stopped"].includes((selectedRun.run_status || '').toLowerCase())}
+                waitingCameraPreview={false}
+                waitingCleaning={false}
+                activeTestId={selectedRun?.trial_id}
+                onResultsUpdate={(results) => setTestResults(results)}
             />
         </div>
     );
