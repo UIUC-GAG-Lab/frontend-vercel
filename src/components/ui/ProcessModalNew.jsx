@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import mqttService from '../../mqtt/mqttservice';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import UR2Stepper from './UR2Stepper';
 import useModalClose from '../../hooks/useModalClose';
 
@@ -25,7 +25,8 @@ const ProcessModal = ({
   waitingCleaning = false,
   activeTestId = null,
   onResultsUpdate = null,  // Callback to pass results to parent
-  onEmergencyStop = null   // Emergency stop callback
+  onEmergencyStop = null,   // Emergency stop callback
+  onConfirmRerun
 }) => {
   const [aluminumImageUrl, setAluminumImageUrl] = useState(null);
   const [siliconImageUrl, setSiliconImageUrl] = useState(null);
@@ -555,10 +556,25 @@ const ProcessModal = ({
             <span className="text-sm">Previous</span>
           </button>
           
-          <div className="text-sm text-gray-600">
-            Viewing: <span className="font-semibold">{viewingStageName || 'N/A'}</span>
-            {viewingStage !== currentStage && (
-              <span className="ml-2 text-xs text-blue-600">(History)</span>
+          <div className="flex flex-col items-center">
+            <div className="text-sm text-gray-600">
+              Viewing: <span className="font-semibold">{viewingStageName || 'N/A'}</span>
+              {viewingStage !== currentStage && (
+                <span className="ml-2 text-xs text-blue-600">(History)</span>
+              )}
+            </div>
+            {onConfirmRerun && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to rerun from ${viewingStageName}?`)) {
+                    onConfirmRerun(viewingStage + 1);
+                  }
+                }}
+                className="mt-1 flex items-center gap-1 px-3 py-1 text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 rounded-full hover:bg-orange-200 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Rerun from this Stage
+              </button>
             )}
           </div>
           

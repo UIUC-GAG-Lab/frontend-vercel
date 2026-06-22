@@ -139,9 +139,9 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
           addLog && addLog('Redirected to Dashboard.');
         }
         
-        // Reset form and close modal
+        // Reset form and close modal — signal that a test was created
         handleReset();
-        onClose();
+        onClose(true);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to create test');

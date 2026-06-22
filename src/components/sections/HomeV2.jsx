@@ -1,13 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopFilter from '../ui/TopFilter';
-import { Activity, Eye, Copy, Trash2, RefreshCw } from 'lucide-react';
+import { Activity, Eye, Copy, Trash2, Loader2 } from 'lucide-react';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ProcessModalNew from '../ui/ProcessModalNew';
+import mqttService from '../../mqtt/mqttservice';
 
-function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handleNotes, handleDelete }) {
-    // Helper function for colored status badges
+// ── Inline toast for user feedback ──────────────────────────────────────────
+function Toast({ message, type, onDismiss }) {
+    if (!message) return null;
+    const bg = type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600';
+    return (
+        <div className={`${bg} text-white text-sm px-4 py-2 rounded-md shadow-lg flex items-center justify-between gap-4 animate-slide-in`}>
+            <span>{message}</span>
+            <button onClick={onDismiss} className="text-white/80 hover:text-white font-bold text-lg leading-none">&times;</button>
+        </div>
+    );
+}
+
+// ── Results Table ───────────────────────────────────────────────────────────
+function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handleDelete, deletingId }) {
     const renderStatusBadge = (status) => {
         const s = (status || 'pending').toLowerCase();
         let colors = 'bg-gray-100 text-gray-700';
@@ -27,7 +40,6 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
         );
     };
 
-    // Helper function to format the timestamp
     const formatDateTime = (dateString) => {
         if (!dateString) return { date: 'N/A', time: '' };
         const d = new Date(dateString);
@@ -46,7 +58,7 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                             <th className="px-6 py-4">Test Name</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4">Test ID &darr;</th>
-                            <th className="px-6 py-4">Date & Time &darr;</th>
+                            <th className="px-6 py-4">Date &amp; Time &darr;</th>
                             <th className="px-6 py-4">Operator</th>
                             <th className="px-6 py-4 text-center">Actions</th>
                         </tr>
@@ -60,11 +72,12 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                             </tr>
                         ) : (
                             runs.map((run) => {
-                                const { date, time } = formatDateTime(run.created_at || new Date());
+                                const { date, time } = formatDateTime(run.created_at || run.timestamp || new Date());
                                 const shortId = run.trial_id ? `#${String(run.trial_id).padStart(5, '0')}` : 'N/A';
-                                
+                                const isDeleting = deletingId === run.trial_id;
+
                                 return (
-                                    <tr key={run.trial_id} className="hover:bg-gray-50 transition-colors group">
+                                    <tr key={run.trial_id} className={`hover:bg-gray-50 transition-colors group ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
                                         <td className="px-6 py-4 font-medium text-gray-900">{run.trial_name}</td>
                                         <td className="px-6 py-4">{renderStatusBadge(run.run_status)}</td>
                                         <td className="px-6 py-4 text-gray-500">{shortId}</td>
@@ -88,16 +101,6 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                                                 <button 
                                                   onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleRerun(run);
-                                                  }}
-                                                  className="p-2 text-blue-600 bg-blue-50/50 hover:bg-blue-100/50 border border-transparent hover:border-blue-200 rounded-lg transition-all" 
-                                                  title="Rerun Test"
-                                                >
-                                                  <RefreshCw className="w-4 h-4" />
-                                                </button>
-                                                <button 
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
                                                     handleNotes(run);
                                                   }}
                                                   className="p-2 text-yellow-600 bg-yellow-50/50 hover:bg-yellow-100/50 border border-transparent hover:border-yellow-200 rounded-lg transition-all" 
@@ -105,8 +108,16 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
                                                 >
                                                   <Copy className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDelete && handleDelete(run)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors" title="Delete Test">
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDelete && handleDelete(run);
+                                                  }}
+                                                  disabled={isDeleting}
+                                                  className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-md transition-colors disabled:opacity-50" 
+                                                  title="Delete Test"
+                                                >
+                                                    {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                                 </button>
                                             </div>
                                         </td>
@@ -121,9 +132,12 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleRerun, handle
     );
 }
 
-export default function HomeV2({ addLog, mqttConnected }) {
-    // 1. Give the component memory to store the database data
+// ── Main HomeV2 Component ───────────────────────────────────────────────────
+export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
     const [runs, setRuns] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState(null);
+
     const [showNotesModal, setShowNotesModal] = useState(false);
     const [selectedNoteRun, setSelectedNoteRun] = useState(null);
     const [showRerunModal, setShowRerunModal] = useState(false);
@@ -143,27 +157,45 @@ export default function HomeV2({ addLog, mqttConnected }) {
     ]);
     const [testResults, setTestResults] = useState({ aluminum: [], silicon: [], dissolution: [] });
 
-    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+    // Toast notification
+    const [toast, setToast] = useState({ message: '', type: '' });
+    const showToast = useCallback((message, type = 'info') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: '' }), 4000);
+    }, []);
 
-    // 2. Fetch the real data from PostgreSQL when the page loads
+    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+    // ── Fetch runs (reusable) ───────────────────────────────────────────
+    const fetchRuns = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const response = await fetch(`${API_BASE_URL}/runs`);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+            setRuns(data);
+        } catch (error) {
+            console.error('Error fetching runs:', error);
+            addLog && addLog(`Error fetching runs: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [API_BASE_URL, addLog]);
+
+    // Fetch on mount
     useEffect(() => {
-        const fetchRuns = async () => {
-            try {
-                const response = await fetch(`${API_BASE_URL}/runs`);
-                if (!response.ok) throw new Error('Network response was not ok');
-                const data = await response.json();
-                setRuns(data);
-            } catch (error) {
-                console.error('Error fetching runs:', error);
-                addLog && addLog(`Error fetching runs: ${error.message}`);
-            }
-        };
         fetchRuns();
-    }, [addLog]);
+    }, [fetchRuns]);
 
-    // 3. Define the action handlers so the buttons don't crash the app
+    // Re-fetch whenever refreshTrigger changes (e.g. after creating a test)
+    useEffect(() => {
+        if (refreshTrigger > 0) {
+            fetchRuns();
+        }
+    }, [refreshTrigger, fetchRuns]);
+
+    // ── Handlers ────────────────────────────────────────────────────────
     const handleStatus = (run) => {
-        console.log('Status clicked for:', run.trial_name);
         addLog && addLog(`Viewing status for: ${run.trial_name}`);
         setSelectedRun(run);
         
@@ -186,7 +218,6 @@ export default function HomeV2({ addLog, mqttConnected }) {
     };
     
     const handleView = (run) => {
-        console.log('View clicked for:', run.trial_name);
         addLog && addLog(`Viewing details for: ${run.trial_name}`);
         setSelectedRun(run);
         setShowDetailsModal(true);
@@ -207,15 +238,58 @@ export default function HomeV2({ addLog, mqttConnected }) {
         setSelectedRerun(run);
         setShowRerunModal(true);
     };
+
     const handleConfirmRerun = async (run, startStage) => {
         addLog && addLog(`Rerunning test: ${run.trial_name} from stage ${startStage}`);
-        // Similar to Home.jsx, we would call mqttService here
-        // mqttService.sendStartCommand(run.trial_id, startStage);
+        if (mqttConnected) {
+            const success = mqttService.sendStartCommand(run.trial_id, startStage);
+            if (success) {
+                addLog && addLog(`Sent start command to RPI for test: ${run.trial_id} from stage ${startStage}`);
+                setShowProcessModal(false);
+            } else {
+                addLog && addLog(`Failed to send start command`);
+            }
+        } else {
+            addLog && addLog(`Cannot start test - MQTT not connected`);
+        }
     };
-    const handleDelete = (run) => {
-        console.log('Delete clicked for:', run.trial_name);
-        addLog && addLog(`Deleting test: ${run.trial_name}`);
+    
+    const handleDelete = async (run) => {
+        if (!window.confirm(`Are you sure you want to delete "${run.trial_name}"? This cannot be undone.`)) {
+            return;
+        }
+        
+        setDeletingId(run.trial_id);
+        addLog && addLog(`Deleting test: ${run.trial_name}...`);
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errorBody}`);
+            }
+            
+            // Remove from local state immediately
+            setRuns(prevRuns => prevRuns.filter(r => r.trial_id !== run.trial_id));
+            addLog && addLog(`Successfully deleted test: ${run.trial_name}`);
+            showToast(`"${run.trial_name}" deleted successfully`, 'success');
+        } catch (error) {
+            console.error('Error deleting run:', error);
+            addLog && addLog(`Error deleting test: ${error.message}`);
+            showToast(`Failed to delete: ${error.message}`, 'error');
+            // Re-fetch to make sure we're in sync with the server
+            fetchRuns();
+        } finally {
+            setDeletingId(null);
+        }
     };
+
     const handleNotes = (run) => {
         setSelectedNoteRun(run);
         setShowNotesModal(true);
@@ -240,20 +314,33 @@ export default function HomeV2({ addLog, mqttConnected }) {
     };
 
     return (
-        <div className="p-2">
+        <div className="p-2 relative">
+            {/* Toast notification */}
+            <div className="fixed top-4 right-4 z-[100]">
+                <Toast message={toast.message} type={toast.type} onDismiss={() => setToast({ message: '', type: '' })} />
+            </div>
+
             <TopFilter 
                 onFilterChange={handleFilterChange} 
                 onExport={handleExport} 
             />
 
-            <ResultsTable 
-                runs={runs} 
-                handleStatus={handleStatus} 
-                handleView={handleView} 
-                handleRerun={handleRerun} 
-                handleNotes={handleNotes}
-                handleDelete={handleDelete} 
-            />
+            {isLoading && runs.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2" />
+                    <span className="text-gray-500">Loading tests...</span>
+                </div>
+            ) : (
+                <ResultsTable 
+                    runs={runs} 
+                    handleStatus={handleStatus} 
+                    handleView={handleView} 
+                    handleRerun={handleRerun} 
+                    handleNotes={handleNotes}
+                    handleDelete={handleDelete}
+                    deletingId={deletingId}
+                />
+            )}
 
             <TestNotesModal
                 isOpen={showNotesModal}
@@ -287,6 +374,7 @@ export default function HomeV2({ addLog, mqttConnected }) {
                 waitingCleaning={false}
                 activeTestId={selectedRun?.trial_id}
                 onResultsUpdate={(results) => setTestResults(results)}
+                onConfirmRerun={(stage) => handleConfirmRerun(selectedRun, stage)}
             />
         </div>
     );

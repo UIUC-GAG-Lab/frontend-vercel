@@ -10,7 +10,7 @@ import { UserProvider } from './context/UserContext';
 import mqttService from './mqtt/mqttservice'; // Import the service
 import CreateTestModal from './components/ui/CreateTestModal';
 
-function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mqttConnected, onConnectMqtt, onDisconnectMqtt, mqttConnecting, showCreateModal, setShowCreateModal }) {
+function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mqttConnected, onConnectMqtt, onDisconnectMqtt, mqttConnecting, showCreateModal, setShowCreateModal, refreshTrigger, onTestCreated }) {
   const [showSampleTypeSelector, setShowSampleTypeSelector] = useState(false);
 
   const handleCreateClick = () => {
@@ -140,6 +140,7 @@ function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mq
               setActivePage={setActivePage}
               addLog={addLog}
               mqttConnected={mqttConnected}
+              refreshTrigger={refreshTrigger}
             />
           </div>
           
@@ -153,7 +154,10 @@ function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mq
       {/* Create Test Modal */}
       <CreateTestModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={(wasCreated) => {
+          setShowCreateModal(false);
+          if (wasCreated) onTestCreated && onTestCreated();
+        }}
         addLog={addLog}
         setActivePage={setActivePage}
         mqttConnected={mqttConnected}
@@ -168,6 +172,7 @@ export default function App() {
   const [mqttConnected, setMqttConnected] = useState(false);
   const [mqttConnecting, setMqttConnecting] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [user, setUser] = useState(() => {
     const savedUser = localStorage.getItem('ur2_user');
     return savedUser ? JSON.parse(savedUser) : null;
@@ -259,6 +264,8 @@ export default function App() {
                   onDisconnectMqtt={handleDisconnectMqtt}
                   showCreateModal={showCreateModal}
                   setShowCreateModal={setShowCreateModal}
+                  refreshTrigger={refreshTrigger}
+                  onTestCreated={() => setRefreshTrigger(prev => prev + 1)}
                 />
               ) : (
                 <Navigate to="/login" replace />
