@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, FileText, RefreshCw, Activity, Eye, Copy, Trash2, StickyNote } from 'lucide-react';
+import { Play, FileText, RefreshCw, Activity, Eye, Copy, Trash2, StickyNote, ChevronLeft, ChevronRight } from 'lucide-react';
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
@@ -14,6 +14,8 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:500
 export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const { userId, teamId, loading: userLoading, syncUser } = useUser();
   const [runs, setRuns] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 7;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedRun, setSelectedRun] = useState(null);
@@ -235,23 +237,19 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         }
       }
       else if (run_status === 'image_analysis_started') {
-        // Standalone image analysis started — open the ProcessModal
+        // Standalone image analysis started
         addLog(`Image analysis started: ${testId}`);
-        setActiveTestId(testId);
-        setCurrentProcessStage(0);
-        setCurrentCycle(1);
-        setShowProcessModal(true);
+        // Only update if it's the test currently being viewed
+        if (activeTestIdRef.current === testId) {
+          setCurrentProcessStage(0);
+          setCurrentCycle(1);
+        }
       }
       else if (run_status === 'waiting_camera_preview') {
         // Camera preview is active on RPI, waiting for user confirmation
         addLog(`Camera preview active for test ${testId} - waiting for confirmation`);
-        // If modal isn't open yet (e.g. image analysis), open it
-        if (!showProcessModalRef.current) {
-          setActiveTestId(testId);
-          setShowProcessModal(true);
-        }
-        if (activeTestIdRef.current === testId || !activeTestIdRef.current) {
-          setActiveTestId(testId);
+        // Only update if it's the test currently being viewed
+        if (activeTestIdRef.current === testId) {
           setWaitingCameraPreview(true);
           if (data.cycle) {
             setCurrentCycle(data.cycle);
@@ -409,6 +407,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const handleStatus = (run) => {
     addLog && addLog(`Viewing status for: ${run.trial_name} (${run.trial_id})`);
     setSelectedRun(run);
+    setActiveTestId(run.trial_id);
     
     // Check if we have real-time data for this test
     const activeTestData = activeTests.get(run.trial_id);
@@ -432,6 +431,9 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
           setCurrentProcessStage(0); // First stage is active
       }
     }
+    
+    setWaitingCameraPreview(run.run_status === 'waiting_camera_preview');
+    setWaitingCleaning(run.run_status === 'waiting_cleaning');
     
     setShowProcessModal(true);
   };
@@ -610,7 +612,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
-                {runs.map((run) => {
+                {runs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((run) => {
                   const { date, time } = formatDateTime(run.created_at || new Date());
                   // Shorten UUID for clean display
                   // Convert to string and pad with zeros to match mockup (e.g., #00028)
@@ -645,12 +647,12 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
 
                           {/* Rerun Button */}
                           <button onClick={() => handleRerun(run)} className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-md transition-colors" title="Rerun Test">
-                            <RefreshCw className="w-3.5 h-3.5" />
+                            <Play className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Notes Button */}
                           <button onClick={() => handleNotes(run)} className="p-1.5 text-yellow-600 bg-yellow-50 hover:bg-yellow-100 border border-yellow-100 rounded-md transition-colors" title="Test Notes">
-                            <Copy className="w-3.5 h-3.5" />
+                            <FileText className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Delete Button */}
@@ -666,6 +668,32 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
               </tbody>
             </table>
           </div>
+          {runs.length > itemsPerPage && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+              <div className="text-sm text-gray-500">
+                Showing {Math.min((currentPage - 1) * itemsPerPage + 1, runs.length)} to {Math.min(currentPage * itemsPerPage, runs.length)} of {runs.length} results
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-medium text-gray-700 min-w-[5rem] text-center">
+                  Page {currentPage} of {Math.ceil(runs.length / itemsPerPage)}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(runs.length / itemsPerPage)))}
+                  disabled={currentPage === Math.ceil(runs.length / itemsPerPage)}
+                  className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

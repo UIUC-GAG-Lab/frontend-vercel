@@ -49,8 +49,8 @@ function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mq
         />
         
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="px-6 py-4 border-b border-gray-200">
-            <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <header className="px-6 py-4 border-b border-gray-200 bg-white">
+            <div className="w-full flex items-center justify-between">
               <h1 className="text-2xl font-bold text-gray-900">
                 UR2 Management Dashboard
               </h1>

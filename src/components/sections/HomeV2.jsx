@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import TopFilter from '../ui/TopFilter';
-import { Activity, Eye, Copy, Trash2, Loader2 } from 'lucide-react';
+import { Activity, Eye, FileText, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
 import TestDetailsModal from '../ui/TestDetailsModal';
@@ -21,6 +21,13 @@ function Toast({ message, type, onDismiss }) {
 
 // ── Results Table ───────────────────────────────────────────────────────────
 function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handleDelete, deletingId }) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 7;
+    
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [runs.length]);
+
     const renderStatusBadge = (status) => {
         const s = (status || 'pending').toLowerCase();
         let colors = 'bg-gray-100 text-gray-700';
@@ -71,7 +78,7 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
                                 </td>
                             </tr>
                         ) : (
-                            runs.map((run) => {
+                            runs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((run) => {
                                 const { date, time } = formatDateTime(run.created_at || run.timestamp || new Date());
                                 const shortId = run.trial_id ? `#${String(run.trial_id).padStart(5, '0')}` : 'N/A';
                                 const isDeleting = deletingId === run.trial_id;
@@ -106,7 +113,7 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
                                                   className="p-2 text-yellow-600 bg-yellow-50/50 hover:bg-yellow-100/50 border border-transparent hover:border-yellow-200 rounded-lg transition-all" 
                                                   title="Test Notes"
                                                 >
-                                                  <Copy className="w-4 h-4" />
+                                                  <FileText className="w-4 h-4" />
                                                 </button>
                                                 <button 
                                                   onClick={(e) => {
@@ -128,6 +135,32 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
                     </tbody>
                 </table>
             </div>
+            {runs.length > itemsPerPage && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+                    <div className="text-sm text-gray-500">
+                        Showing {Math.min((currentPage - 1) * itemsPerPage + 1, runs.length)} to {Math.min(currentPage * itemsPerPage, runs.length)} of {runs.length} results
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700 min-w-[5rem] text-center">
+                            Page {currentPage} of {Math.ceil(runs.length / itemsPerPage)}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(runs.length / itemsPerPage)))}
+                            disabled={currentPage === Math.ceil(runs.length / itemsPerPage)}
+                            className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -193,6 +226,27 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
             fetchRuns();
         }
     }, [refreshTrigger, fetchRuns]);
+
+    // Check for newly created test that should show process modal
+    // Runs on an interval so it picks up window.activeTestInfo set by CreateTestModal
+    useEffect(() => {
+        const check = () => {
+            if (window.activeTestInfo && window.activeTestInfo.showProcessModal) {
+                // Set selectedRun so handleStatus logic runs
+                setSelectedRun({
+                    trial_id: window.activeTestInfo.testId,
+                    trial_name: window.activeTestInfo.trialName
+                });
+                setCurrentProcessStage(0);
+                setShowProcessModal(true);
+                addLog && addLog(`Showing process modal for newly created test: ${window.activeTestInfo.testId}`);
+                window.activeTestInfo = null;
+            }
+        };
+        check(); // run immediately on mount
+        const interval = setInterval(check, 200);
+        return () => clearInterval(interval);
+    }, [addLog]);
 
     // ── Handlers ────────────────────────────────────────────────────────
     const handleStatus = (run) => {
@@ -307,7 +361,36 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
         addLog && addLog(`Notes saved for test ${testId}`);
     };
 
-    const handleFilterChange = () => {};
+    const [filters, setFilters] = useState({ query: '', status: 'all', startDate: '', endDate: '', operator: '' });
+
+    const handleFilterChange = useCallback((newFilters) => {
+        setFilters(newFilters);
+    }, []);
+
+    const filteredRuns = useMemo(() => {
+        return runs.filter((run) => {
+            let match = true;
+            if (filters.query) {
+                const queryLower = filters.query.toLowerCase();
+                match = match && (run.trial_name?.toLowerCase().includes(queryLower) || String(run.trial_id).includes(queryLower));
+            }
+            if (filters.status && filters.status !== 'all') {
+                match = match && run.run_status?.toLowerCase() === filters.status.toLowerCase();
+            }
+            if (filters.operator) {
+                match = match && run.trial_operator?.toLowerCase().includes(filters.operator.toLowerCase());
+            }
+            if (filters.startDate) {
+                const runDate = new Date(run.created_at || run.timestamp).toISOString().slice(0, 10);
+                match = match && runDate >= filters.startDate;
+            }
+            if (filters.endDate) {
+                const runDate = new Date(run.created_at || run.timestamp).toISOString().slice(0, 10);
+                match = match && runDate <= filters.endDate;
+            }
+            return match;
+        });
+    }, [runs, filters]);
 
     const handleExport = () => {
         addLog && addLog('Export CSV requested');
@@ -332,7 +415,7 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
                 </div>
             ) : (
                 <ResultsTable 
-                    runs={runs} 
+                    runs={filteredRuns} 
                     handleStatus={handleStatus} 
                     handleView={handleView} 
                     handleRerun={handleRerun} 

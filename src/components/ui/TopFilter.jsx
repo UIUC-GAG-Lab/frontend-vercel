@@ -29,7 +29,20 @@ function renderDateRangePopup({
 
   return createPortal(
     <div ref={popupRef} style={style} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xl">
-      <div className="mb-4 text-[10px] tracking-[0.18em] text-gray-500">FILTER BY DATE RANGE</div>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-[10px] tracking-[0.18em] text-gray-500">FILTER BY DATE RANGE</div>
+        <button
+          type="button"
+          onClick={() => {
+            const today = getTodayDate();
+            onDraftStartDateChange(today);
+            onDraftEndDateChange(today);
+          }}
+          className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+        >
+          Jump to Today
+        </button>
+      </div>
 
       <div className="space-y-3">
         <div className="flex items-center gap-3">
