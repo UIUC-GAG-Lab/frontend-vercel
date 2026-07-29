@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import TopFilter from '../ui/TopFilter';
 import { Activity, Eye, FileText, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ProcessModalNew from '../ui/ProcessModalNew';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
+import { authFetch } from '../../services/authService';
+import { useUser } from '../../context/UserContext';
+
+import { API_BASE_URL } from '../../config/api';
 
 // ── Inline toast for user feedback ──────────────────────────────────────────
 function Toast({ message, type, onDismiss }) {
@@ -20,13 +24,7 @@ function Toast({ message, type, onDismiss }) {
 }
 
 // ── Results Table ───────────────────────────────────────────────────────────
-function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handleDelete, deletingId }) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 7;
-    
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [runs.length]);
+function ResultsTable({ runs = [], pagination, onPageChange, handleStatus, handleView, handleNotes, handleDelete, deletingId }) {
 
     const renderStatusBadge = (status) => {
         const s = (status || 'pending').toLowerCase();
@@ -78,7 +76,7 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
                                 </td>
                             </tr>
                         ) : (
-                            runs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((run) => {
+                            runs.map((run) => {
                                 const { date, time } = formatDateTime(run.created_at || run.timestamp || new Date());
                                 const shortId = run.trial_id ? `#${String(run.trial_id).padStart(5, '0')}` : 'N/A';
                                 const isDeleting = deletingId === run.trial_id;
@@ -135,25 +133,27 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
                     </tbody>
                 </table>
             </div>
-            {runs.length > itemsPerPage && (
+
+            {/* Server-side pagination controls */}
+            {pagination && pagination.totalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
                     <div className="text-sm text-gray-500">
-                        Showing {Math.min((currentPage - 1) * itemsPerPage + 1, runs.length)} to {Math.min(currentPage * itemsPerPage, runs.length)} of {runs.length} results
+                        Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
                     </div>
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
+                            onClick={() => onPageChange(pagination.page - 1)}
+                            disabled={pagination.page === 1}
                             className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
                         >
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         <span className="text-sm font-medium text-gray-700 min-w-[5rem] text-center">
-                            Page {currentPage} of {Math.ceil(runs.length / itemsPerPage)}
+                            Page {pagination.page} of {pagination.totalPages}
                         </span>
                         <button
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(runs.length / itemsPerPage)))}
-                            disabled={currentPage === Math.ceil(runs.length / itemsPerPage)}
+                            onClick={() => onPageChange(pagination.page + 1)}
+                            disabled={pagination.page === pagination.totalPages}
                             className="p-1 rounded-md border border-gray-300 disabled:opacity-50 hover:bg-gray-50 text-gray-600 flex items-center justify-center"
                         >
                             <ChevronRight className="w-5 h-5" />
@@ -167,7 +167,10 @@ function ResultsTable({ runs = [], handleStatus, handleView, handleNotes, handle
 
 // ── Main HomeV2 Component ───────────────────────────────────────────────────
 export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
+    const { userId, teamId, loading: userLoading } = useUser();
     const [runs, setRuns] = useState([]);
+    const [pagination, setPagination] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
 
@@ -190,6 +193,9 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
     ]);
     const [testResults, setTestResults] = useState({ aluminum: [], silicon: [], dissolution: [] });
 
+    // Filter state
+    const [filters, setFilters] = useState({ query: '', status: 'all', startDate: '', endDate: '', operator: '' });
+
     // Toast notification
     const [toast, setToast] = useState({ message: '', type: '' });
     const showToast = useCallback((message, type = 'info') => {
@@ -197,42 +203,67 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
         setTimeout(() => setToast({ message: '', type: '' }), 4000);
     }, []);
 
-    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
-
-    // ── Fetch runs (reusable) ───────────────────────────────────────────
-    const fetchRuns = useCallback(async () => {
+    // ── Fetch runs — server-side pagination & filtering ─────────────────
+    const fetchRuns = useCallback(async (page = 1) => {
         try {
             setIsLoading(true);
-            const response = await fetch(`${API_BASE_URL}/runs`);
+            const params = new URLSearchParams();
+
+            // Scoping
+            if (teamId) {
+                params.append('team_id', teamId);
+            } else if (userId) {
+                params.append('user_id', userId);
+            }
+
+            // Filters → server query params
+            if (filters.query) params.append('search', filters.query);
+            if (filters.status && filters.status !== 'all') params.append('status', filters.status);
+            if (filters.startDate) params.append('date_from', filters.startDate);
+            if (filters.endDate) params.append('date_to', filters.endDate);
+            if (filters.operator) params.append('operator', filters.operator);
+
+            // Pagination
+            params.append('page', page);
+            params.append('limit', 25);
+
+            const url = `${API_BASE_URL}/runs?${params.toString()}`;
+            const response = await authFetch(url);
+
             if (!response.ok) throw new Error('Network response was not ok');
-            const data = await response.json();
-            setRuns(data);
+
+            const result = await response.json();
+
+            // Backend returns { data: [...], pagination: { page, limit, total, totalPages } }
+            setRuns(result.data);
+            setPagination(result.pagination);
+            setCurrentPage(result.pagination.page);
         } catch (error) {
             console.error('Error fetching runs:', error);
             addLog && addLog(`Error fetching runs: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
-    }, [API_BASE_URL, addLog]);
+    }, [teamId, userId, filters, addLog]);
 
-    // Fetch on mount
+    // Fetch on mount + when deps change
     useEffect(() => {
-        fetchRuns();
-    }, [fetchRuns]);
+        if (!userLoading) {
+            fetchRuns(1); // reset to page 1 when filters or user context changes
+        }
+    }, [fetchRuns, userLoading]);
 
     // Re-fetch whenever refreshTrigger changes (e.g. after creating a test)
     useEffect(() => {
         if (refreshTrigger > 0) {
-            fetchRuns();
+            fetchRuns(1);
         }
     }, [refreshTrigger, fetchRuns]);
 
     // Check for newly created test that should show process modal
-    // Runs on an interval so it picks up window.activeTestInfo set by CreateTestModal
     useEffect(() => {
         const check = () => {
             if (window.activeTestInfo && window.activeTestInfo.showProcessModal) {
-                // Set selectedRun so handleStatus logic runs
                 setSelectedRun({
                     trial_id: window.activeTestInfo.testId,
                     trial_name: window.activeTestInfo.trialName
@@ -243,10 +274,22 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
                 window.activeTestInfo = null;
             }
         };
-        check(); // run immediately on mount
+        check();
         const interval = setInterval(check, 200);
         return () => clearInterval(interval);
     }, [addLog]);
+
+    // ── Page change handler ─────────────────────────────────────────────
+    const handlePageChange = useCallback((newPage) => {
+        fetchRuns(newPage);
+    }, [fetchRuns]);
+
+    // ── Filter change handler ───────────────────────────────────────────
+    const handleFilterChange = useCallback((newFilters) => {
+        setFilters(newFilters);
+        // fetchRuns will be re-triggered by the useEffect that depends on fetchRuns
+        // (which depends on filters) — reset to page 1 automatically
+    }, []);
 
     // ── Handlers ────────────────────────────────────────────────────────
     const handleStatus = (run) => {
@@ -296,7 +339,7 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
     const handleConfirmRerun = async (run, startStage) => {
         addLog && addLog(`Rerunning test: ${run.trial_name} from stage ${startStage}`);
         if (mqttConnected) {
-            const success = mqttService.sendStartCommand(run.trial_id, startStage);
+            const success = sseService.sendStartCommand(run.trial_id, startStage);
             if (success) {
                 addLog && addLog(`Sent start command to RPI for test: ${run.trial_id} from stage ${startStage}`);
                 setShowProcessModal(false);
@@ -317,11 +360,9 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
         addLog && addLog(`Deleting test: ${run.trial_name}...`);
         
         try {
-            const response = await fetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
+            const response = await authFetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
                 method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
             });
             
             if (!response.ok) {
@@ -329,16 +370,15 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
                 throw new Error(`Server returned ${response.status}: ${errorBody}`);
             }
             
-            // Remove from local state immediately
-            setRuns(prevRuns => prevRuns.filter(r => r.trial_id !== run.trial_id));
             addLog && addLog(`Successfully deleted test: ${run.trial_name}`);
             showToast(`"${run.trial_name}" deleted successfully`, 'success');
+            // Re-fetch from server to stay in sync with pagination
+            fetchRuns(currentPage);
         } catch (error) {
             console.error('Error deleting run:', error);
             addLog && addLog(`Error deleting test: ${error.message}`);
             showToast(`Failed to delete: ${error.message}`, 'error');
-            // Re-fetch to make sure we're in sync with the server
-            fetchRuns();
+            fetchRuns(currentPage);
         } finally {
             setDeletingId(null);
         }
@@ -360,37 +400,6 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
         ));
         addLog && addLog(`Notes saved for test ${testId}`);
     };
-
-    const [filters, setFilters] = useState({ query: '', status: 'all', startDate: '', endDate: '', operator: '' });
-
-    const handleFilterChange = useCallback((newFilters) => {
-        setFilters(newFilters);
-    }, []);
-
-    const filteredRuns = useMemo(() => {
-        return runs.filter((run) => {
-            let match = true;
-            if (filters.query) {
-                const queryLower = filters.query.toLowerCase();
-                match = match && (run.trial_name?.toLowerCase().includes(queryLower) || String(run.trial_id).includes(queryLower));
-            }
-            if (filters.status && filters.status !== 'all') {
-                match = match && run.run_status?.toLowerCase() === filters.status.toLowerCase();
-            }
-            if (filters.operator) {
-                match = match && run.trial_operator?.toLowerCase().includes(filters.operator.toLowerCase());
-            }
-            if (filters.startDate) {
-                const runDate = new Date(run.created_at || run.timestamp).toISOString().slice(0, 10);
-                match = match && runDate >= filters.startDate;
-            }
-            if (filters.endDate) {
-                const runDate = new Date(run.created_at || run.timestamp).toISOString().slice(0, 10);
-                match = match && runDate <= filters.endDate;
-            }
-            return match;
-        });
-    }, [runs, filters]);
 
     const handleExport = () => {
         addLog && addLog('Export CSV requested');
@@ -415,7 +424,9 @@ export default function HomeV2({ addLog, mqttConnected, refreshTrigger }) {
                 </div>
             ) : (
                 <ResultsTable 
-                    runs={filteredRuns} 
+                    runs={runs} 
+                    pagination={pagination}
+                    onPageChange={handlePageChange}
                     handleStatus={handleStatus} 
                     handleView={handleView} 
                     handleRerun={handleRerun} 

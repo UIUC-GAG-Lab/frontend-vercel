@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, FileText, Hash, RotateCcw, Send } from 'lucide-react';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
 import { useUser } from '../../context/UserContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../../config/api';
 
 export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttConnectedProp }) {
   const { userId, teamId } = useUser();
@@ -27,7 +27,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
   // Check connection status periodically (as backup)
   useEffect(() => {
     const checkConnection = () => {
-      setMqttConnected(mqttService.isConnected);
+      setMqttConnected(sseService.isConnected);
     };
     const interval = setInterval(checkConnection, 1000);
     
@@ -115,7 +115,7 @@ export default function CreatePage({ addLog, setActivePage, mqttConnected: mqttC
         
         // Send start command via MQTT if connected
         if (mqttConnected && result.trial_id) {
-          const success = mqttService.sendStartCommand(result.trial_id, formData.debugMode);
+          const success = sseService.sendStartCommand(result.trial_id, formData.debugMode);
           if (success) {
             addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}${formData.debugMode ? ' (DEBUG MODE)' : ''}`);
             

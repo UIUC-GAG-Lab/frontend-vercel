@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, UserPlus, Copy, RefreshCw, LogOut, Trash2, Crown, Check, X } from 'lucide-react';
 import { useUser } from '../../context/UserContext';
+import { authFetch } from '../../services/authService';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../../config/api';
 
 export default function TeamManagement() {
   const { userProfile, refreshProfile, loading: userLoading } = useUser();
@@ -17,14 +18,9 @@ export default function TeamManagement() {
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const getToken = () => localStorage.getItem('ur2_token');
-
   const fetchTeamMembers = useCallback(async () => {
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams/members`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await authFetch(`${API_BASE_URL}/teams/members`);
 
       if (response.ok) {
         const data = await response.json();
@@ -56,13 +52,9 @@ export default function TeamManagement() {
     setSuccess(null);
 
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams`, {
+      const response = await authFetch(`${API_BASE_URL}/teams`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamName: newTeamName })
       });
 
@@ -88,13 +80,9 @@ export default function TeamManagement() {
     setSuccess(null);
 
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams/join`, {
+      const response = await authFetch(`${API_BASE_URL}/teams/join`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamCode: joinCode.toUpperCase() })
       });
 
@@ -121,10 +109,8 @@ export default function TeamManagement() {
     setSuccess(null);
 
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams/leave`, {
+      const response = await authFetch(`${API_BASE_URL}/teams/leave`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       const data = await response.json();
@@ -149,10 +135,8 @@ export default function TeamManagement() {
     setSuccess(null);
 
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams/members/${userId}`, {
+      const response = await authFetch(`${API_BASE_URL}/teams/members/${userId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       const data = await response.json();
@@ -175,10 +159,8 @@ export default function TeamManagement() {
     setSuccess(null);
 
     try {
-      const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/teams/regenerate-code`, {
+      const response = await authFetch(`${API_BASE_URL}/teams/regenerate-code`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       const data = await response.json();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { setAccessToken } from '../../services/authService';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../../config/api';
 
 export default function Login({ error, onLogin }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -28,6 +29,7 @@ export default function Login({ error, onLogin }) {
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // receive the httpOnly refreshToken cookie
         body: JSON.stringify(body),
       });
 
@@ -39,12 +41,12 @@ export default function Login({ error, onLogin }) {
         return;
       }
 
-      // Store token and user, same as OAuth callback
-      localStorage.setItem('ur2_token', data.token);
+      // Backend returns { accessToken, user }
+      setAccessToken(data.accessToken);
       localStorage.setItem('ur2_user', JSON.stringify(data.user));
 
       if (onLogin) {
-        onLogin(data.user, data.token);
+        onLogin(data.user, data.accessToken);
       }
 
       window.location.href = '/';

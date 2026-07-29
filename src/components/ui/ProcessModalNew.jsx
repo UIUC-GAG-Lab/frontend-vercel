@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
 import { X, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import UR2Stepper from './UR2Stepper';
 import useModalClose from '../../hooks/useModalClose';
@@ -53,7 +53,7 @@ const ProcessModal = ({
 
   // Handle camera preview confirmation (user clicks confirm after selecting sample type)
   const handlePreviewConfirmed = () => {
-    if (mqttService?.client?.connected && activeTestId) {
+    if (sseService?.client?.connected && activeTestId) {
       const payload = {
         testId: activeTestId,
         cycle: currentCycle,
@@ -64,7 +64,7 @@ const ProcessModal = ({
       if (customFilename.trim()) {
         payload.customFilename = customFilename.trim().replace(/\.png$/i, '');
       }
-      mqttService.client.publish(CAMERA_PREVIEW_CONFIRM_TOPIC, JSON.stringify(payload));
+      sseService.client.publish(CAMERA_PREVIEW_CONFIRM_TOPIC, JSON.stringify(payload));
       console.log(`📸 Camera preview confirmed - ${selectedSampleType} sample - filename: ${customFilename || 'auto'} - sent to RPI`);
       // Reset filename for next capture
       setCustomFilename('');
@@ -75,8 +75,8 @@ const ProcessModal = ({
   const handleHeatConfirmed = () => {
     setHeatConfirmed(true);
     // Send MQTT message to backend/fake RPI
-    if (mqttService?.client?.connected) {
-      mqttService.client.publish('ur2/manual/heat_confirmed', JSON.stringify({
+    if (sseService?.client?.connected) {
+      sseService.client.publish('ur2/manual/heat_confirmed', JSON.stringify({
         timestamp: new Date().toISOString(),
         temperature: 90
       }));
@@ -89,8 +89,8 @@ const ProcessModal = ({
     setWaitStartTime(Date.now());
     setWaitSkipped(false); // Reset skip flag
     // Send MQTT message to backend/fake RPI
-    if (mqttService?.client?.connected) {
-      mqttService.client.publish('ur2/manual/stirring_confirmed', JSON.stringify({
+    if (sseService?.client?.connected) {
+      sseService.client.publish('ur2/manual/stirring_confirmed', JSON.stringify({
         timestamp: new Date().toISOString(),
         rpm: 0.56,
         wait_minutes: 10
@@ -104,8 +104,8 @@ const ProcessModal = ({
     setRemainingTime(0);
     setWaitStartTime(null); // Stop the countdown
     // Notify backend to skip wait
-    if (mqttService?.client?.connected) {
-      mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
+    if (sseService?.client?.connected) {
+      sseService.client.publish('ur2/manual/wait_complete', JSON.stringify({
         timestamp: new Date().toISOString(),
         skipped: true
       }));
@@ -117,8 +117,8 @@ const ProcessModal = ({
     setCleaningSkipped(true);
     setCleaningRemaining(0);
     setCleaningStartTime(null);
-    if (mqttService?.client?.connected) {
-      mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
+    if (sseService?.client?.connected) {
+      sseService.client.publish('ur2/manual/wait_complete', JSON.stringify({
         timestamp: new Date().toISOString(),
         skipped: true
       }));
@@ -128,8 +128,8 @@ const ProcessModal = ({
   // Handle filtration confirmation
   const handleFiltrationConfirmed = () => {
     setFiltrationConfirmed(true);
-    if (mqttService?.client?.connected) {
-      mqttService.client.publish('ur2/manual/filtration_confirmed', JSON.stringify({
+    if (sseService?.client?.connected) {
+      sseService.client.publish('ur2/manual/filtration_confirmed', JSON.stringify({
         timestamp: new Date().toISOString()
       }));
     }
@@ -181,7 +181,7 @@ const ProcessModal = ({
             const uint8Array = new Uint8Array(arrayBuffer);
             
             // Send image metadata
-            mqttService.client.publish(IMAGE_TOPIC, JSON.stringify({
+            sseService.client.publish(IMAGE_TOPIC, JSON.stringify({
               testId: currentCameraCapture.testId,
               cycle: currentCameraCapture.cycle,
               timestamp: new Date().toISOString(),
@@ -189,10 +189,10 @@ const ProcessModal = ({
             }));
             
             // Send image data
-            mqttService.client.publish(IMAGE_RAW_TOPIC, uint8Array);
+            sseService.client.publish(IMAGE_RAW_TOPIC, uint8Array);
             
             // Confirm capture complete
-            mqttService.client.publish(CAMERA_READY_TOPIC, JSON.stringify({
+            sseService.client.publish(CAMERA_READY_TOPIC, JSON.stringify({
               testId: currentCameraCapture.testId,
               cycle: currentCameraCapture.cycle,
               timestamp: new Date().toISOString()
@@ -216,7 +216,7 @@ const ProcessModal = ({
 
   // Listen for camera trigger from backend
   useEffect(() => {
-    if (!isOpen || !mqttService?.isConnected || !mqttService?.client) return;
+    if (!isOpen || !sseService?.isConnected || !sseService?.client) return;
 
     const handleCameraTrigger = (topic, message) => {
       if (topic === CAMERA_TRIGGER_TOPIC) {
@@ -235,11 +235,11 @@ const ProcessModal = ({
       }
     };
 
-    mqttService.client.subscribe(CAMERA_TRIGGER_TOPIC);
-    mqttService.client.on('message', handleCameraTrigger);
+    sseService.client.subscribe(CAMERA_TRIGGER_TOPIC);
+    sseService.client.on('message', handleCameraTrigger);
 
     return () => {
-      mqttService.client.removeListener('message', handleCameraTrigger);
+      sseService.client.removeListener('message', handleCameraTrigger);
     };
   }, [isOpen]);
 
@@ -256,8 +256,8 @@ const ProcessModal = ({
         clearInterval(interval);
         setWaitStartTime(null);
         // Optionally notify backend that wait is complete
-        if (mqttService?.client?.connected) {
-          mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
+        if (sseService?.client?.connected) {
+          sseService.client.publish('ur2/manual/wait_complete', JSON.stringify({
             timestamp: new Date().toISOString()
           }));
         }
@@ -288,8 +288,8 @@ const ProcessModal = ({
       if (remaining === 0) {
         clearInterval(interval);
         setCleaningStartTime(null);
-        if (mqttService?.client?.connected) {
-          mqttService.client.publish('ur2/manual/wait_complete', JSON.stringify({
+        if (sseService?.client?.connected) {
+          sseService.client.publish('ur2/manual/wait_complete', JSON.stringify({
             timestamp: new Date().toISOString()
           }));
         }
@@ -314,7 +314,7 @@ const ProcessModal = ({
   }, [latestImageMeta]);
 
   useEffect(() => { 
-    if (!isOpen || !mqttService?.isConnected || !mqttService?.client) return;
+    if (!isOpen || !sseService?.isConnected || !sseService?.client) return;
 
     const handleMessage = (topic, message) => {
       try {
@@ -388,13 +388,13 @@ const ProcessModal = ({
       }
     };
 
-    mqttService.client.subscribe(IMAGE_TOPIC);
-    mqttService.client.subscribe(IMAGE_RAW_TOPIC);
-    mqttService.client.on('message', handleMessage);
+    sseService.client.subscribe(IMAGE_TOPIC);
+    sseService.client.subscribe(IMAGE_RAW_TOPIC);
+    sseService.client.on('message', handleMessage);
 
     return () => {
       try {
-        mqttService.client.removeListener('message', handleMessage);
+        sseService.client.removeListener('message', handleMessage);
       } catch {}
       setLatestImageMeta(null);
       if (aluminumImageUrl) URL.revokeObjectURL(aluminumImageUrl);

@@ -7,8 +7,11 @@ import Console from './components/dashboard/Console';
 import Login from './components/auth/Login';
 import AuthCallback from './components/auth/AuthCallback';
 import { UserProvider } from './context/UserContext';
-import mqttService from './mqtt/mqttservice'; // Import the service
+import sseService from './services/sseService';
+import { setAccessToken, clearAuth, authFetch } from './services/authService';
 import CreateTestModal from './components/ui/CreateTestModal';
+
+import { API_BASE_URL } from './config/api';
 
 function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mqttConnected, onConnectMqtt, onDisconnectMqtt, mqttConnecting, showCreateModal, setShowCreateModal, refreshTrigger, onTestCreated }) {
   const [showSampleTypeSelector, setShowSampleTypeSelector] = useState(false);
@@ -34,7 +37,7 @@ function Dashboard({ user, onLogout, activePage, setActivePage, logs, addLog, mq
   const startImageAnalysis = (sampleType) => {
     setShowSampleTypeSelector(false);
     const analysisId = `img-analysis-${Date.now()}`;
-    mqttService.sendImageAnalysisCommand(analysisId, sampleType);
+    sseService.sendImageAnalysisCommand(analysisId, sampleType);
     addLog && addLog(`Starting ${sampleType.toUpperCase()} image analysis: ${analysisId}`);
   };
 
@@ -184,21 +187,29 @@ export default function App() {
   const handleLogin = (userData, authToken) => {
     setUser(userData);
     setToken(authToken);
+    setAccessToken(authToken);
     localStorage.setItem('ur2_user', JSON.stringify(userData));
-    if (authToken) {
-      localStorage.setItem('ur2_token', authToken);
-    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Call backend to clear refresh cookie and disconnect MQTT
+      await authFetch(`${API_BASE_URL}/auth/logout`, { method: 'POST' });
+    } catch (err) {
+      console.error('Logout API call failed:', err);
+    }
+
+    // Disconnect SSE stream
+    sseService.disconnect();
+
+    // Clear local state
+    clearAuth();
     setUser(null);
     setToken(null);
-    localStorage.removeItem('ur2_user');
-    localStorage.removeItem('ur2_token');
     setActivePage('home');
   };
 
-  // Manual MQTT connection handlers
+  // Connect: open SSE stream + tell backend to connect MQTT broker
   const handleConnectMqtt = async () => {
     if (!user || !token) {
       addLog('Please login first');
@@ -206,7 +217,10 @@ export default function App() {
     }
     setMqttConnecting(true);
     try {
-      await mqttService.connect();
+      // 1. Open the SSE stream so we receive real-time events
+      sseService.connect();
+      // 2. Tell the backend to connect to the MQTT broker
+      await sseService.connectMqtt();
       addLog('Connected to backend - MQTT relay active');
     } catch (error) {
       addLog(`Connection failed: ${error.message}`);
@@ -215,8 +229,13 @@ export default function App() {
     }
   };
 
-  const handleDisconnectMqtt = () => {
-    mqttService.disconnect();
+  const handleDisconnectMqtt = async () => {
+    try {
+      await sseService.disconnectMqtt();
+    } catch (err) {
+      console.error('MQTT disconnect failed:', err);
+    }
+    sseService.disconnect();
     setMqttConnected(false);
     setMqttConnecting(false);
     addLog('MQTT disconnected');
@@ -225,7 +244,7 @@ export default function App() {
   // Check MQTT connection status periodically
   useEffect(() => {
     const checkConnection = () => {
-      setMqttConnected(mqttService.isConnected);
+      setMqttConnected(sseService.isConnected);
     };
     
     const interval = setInterval(checkConnection, 1000);

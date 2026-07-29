@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-
-// Helper to get auth headers
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('ur2_token');
-    return {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-    };
-};
+import { authFetch } from '../../services/authService';
+import { API_BASE_URL } from '../../config/api';
 
 const MQTTSettings = () => {
     const [config, setConfig] = useState({
@@ -29,9 +20,7 @@ const MQTTSettings = () => {
 
     const loadCurrentConfig = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/config/mqtt`, {
-                headers: getAuthHeaders()
-            });
+            const response = await authFetch(`${API_BASE_URL}/config/mqtt`);
             if (response.ok) {
                 const mqttConfig = await response.json();
                 setConfig(mqttConfig);
@@ -53,9 +42,9 @@ const MQTTSettings = () => {
         setMessage('');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/config/mqtt`, {
+            const response = await authFetch(`${API_BASE_URL}/config/mqtt`, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config),
             });
 

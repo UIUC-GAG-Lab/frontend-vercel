@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, FileText, Hash, RotateCcw, Send, X } from 'lucide-react';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
+import { authFetch } from '../../services/authService';
 import { useUser } from '../../context/UserContext';
 import useModalClose from '../../hooks/useModalClose';
-
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
 export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage, mqttConnected: mqttConnectedProp }) {
   const { userId, teamId } = useUser();
@@ -19,6 +18,7 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [mqttConnected, setMqttConnected] = useState(mqttConnectedProp || false);
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 
   // Update MQTT connection status when prop changes
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
   // Check connection status periodically (as backup)
   useEffect(() => {
     const checkConnection = () => {
-      setMqttConnected(mqttService.isConnected);
+      setMqttConnected(sseService.isConnected);
     };
     const interval = setInterval(checkConnection, 1000);
     
@@ -94,7 +94,7 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
     setIsSubmitting(true);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/runs`, {
+      const response = await authFetch(`${API_BASE_URL}/runs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -102,9 +102,10 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
         body: JSON.stringify({
           trial_name: formData.trialName,
           trial_operator: formData.userName,
-          sample_size: parseInt(formData.sampleSize),
+          sample_size: parseFloat(formData.sampleSize),
           user_id: userId || null,
-          team_id: teamId || null
+          team_id: teamId || null,
+          debug_mode: formData.debugMode
         })
       });
 
@@ -114,7 +115,7 @@ export default function CreateTestModal({ isOpen, onClose, addLog, setActivePage
         
         // Send start command via MQTT if connected
         if (mqttConnected && result.trial_id) {
-          const success = mqttService.sendStartCommand(result.trial_id, formData.debugMode);
+          const success = sseService.sendStartCommand(result.trial_id, formData.debugMode);
           if (success) {
             addLog && addLog(`Sent start command to RPI for test: ${result.trial_id}${formData.debugMode ? ' (DEBUG MODE)' : ''}`);
             

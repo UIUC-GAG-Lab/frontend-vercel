@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
 import { X, Check, Loader2, XCircle } from 'lucide-react';
 import useModalClose from '../../hooks/useModalClose';
 
@@ -13,7 +13,7 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
   const [latestImageMeta, setLatestImageMeta] = useState(null);
 
   useEffect(() => { 
-    if (!isOpen || !mqttService.isConnected || !mqttService.client) return;
+    if (!isOpen || !sseService.isConnected || !sseService.client) return;
 
     // Handler for image metadata
     const handleImageMeta = (topic, message) => {
@@ -38,18 +38,18 @@ const ProcessModal = ({ isOpen, onClose, currentStage, stages, currentCycle = 1,
     };
 
     // Subscribe to image topics
-    mqttService.client.subscribe(IMAGE_TOPIC);
-    mqttService.client.subscribe(IMAGE_RAW_TOPIC);
-    mqttService.client.on('message', handleImageMeta);
-    mqttService.client.on('message', handleImageRaw);
+    sseService.client.subscribe(IMAGE_TOPIC);
+    sseService.client.subscribe(IMAGE_RAW_TOPIC);
+    sseService.client.on('message', handleImageMeta);
+    sseService.client.on('message', handleImageRaw);
 
     return () => {
-      mqttService.client.removeListener('message', handleImageMeta);
-      mqttService.client.removeListener('message', handleImageRaw);
+      sseService.client.removeListener('message', handleImageMeta);
+      sseService.client.removeListener('message', handleImageRaw);
       if (imageUrl) URL.revokeObjectURL(imageUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, mqttService.isConnected, latestImageMeta]);
+  }, [isOpen, sseService.isConnected, latestImageMeta]);
   const { handleBackdropClick } = useModalClose({ isOpen, onClose });
 
   if (!isOpen) return null;

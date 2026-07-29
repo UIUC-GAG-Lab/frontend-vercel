@@ -150,14 +150,7 @@ export default function TopFilter({ onFilterChange, onExport, initial = {} }) {
     };
   }, [isDateRangeOpen]);
 
-  const clearFilters = () => {
-    setQuery(EMPTY_FILTERS.query);
-    setStatus(EMPTY_FILTERS.status);
-    setStartDate(getTodayDate());
-    setEndDate(getTodayDate());
-    setOperator(EMPTY_FILTERS.operator);
-    onFilterChange?.({ ...EMPTY_FILTERS, startDate: getTodayDate(), endDate: getTodayDate() });
-  };
+
 
   const dateRangeLabel = useMemo(() => {
     if (startDate && endDate) return `${startDate} → ${endDate}`;

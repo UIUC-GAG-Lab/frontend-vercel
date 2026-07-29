@@ -3,13 +3,14 @@ import { Play, FileText, RefreshCw, Activity, Eye, Copy, Trash2, StickyNote, Che
 import TestRunCard from '../ui/TestRunCard';
 import TestDetailsModal from '../ui/TestDetailsModal';
 import ConfirmationModal from '../ui/ConfirmationModal';
-import mqttService from '../../mqtt/mqttservice';
+import sseService from '../../services/sseService';
+import { authFetch } from '../../services/authService';
 import ProcessModalNew from '../ui/ProcessModalNew';
 import TestNotesModal from '../ui/TestNotesModal';
 import RerunModal from '../ui/RerunModal';
 import { useUser } from '../../context/UserContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../../config/api';
 
 export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   const { userId, teamId, loading: userLoading, syncUser } = useUser();
@@ -58,7 +59,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Function to update run status in database
   const updateRunStatus = useCallback(async (testId, run_status, run_stage) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/runs/${testId}/status`, {
+      const response = await authFetch(`${API_BASE_URL}/runs/${testId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -83,7 +84,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Function to save test results to database
   const saveResults = useCallback(async (testId, results) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/runs/${testId}/results`, {
+      const response = await authFetch(`${API_BASE_URL}/runs/${testId}/results`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ results }),
@@ -107,7 +108,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Check connection status periodically (as backup)
   useEffect(() => {
     const checkConnection = () => {
-      setMqttConnected(mqttService.isConnected);
+      setMqttConnected(sseService.isConnected);
     };
     const interval = setInterval(checkConnection, 1000);
     
@@ -124,7 +125,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Uses refs to avoid stale closures — this callback is registered ONCE
   useEffect(() => {
     // Set up stage update callback
-    mqttService.setStageUpdateCallback(async (data) => {
+    sseService.setStageUpdateCallback(async (data) => {
 
       const testId = data.testId;
       const run_status = data.run_status;
@@ -277,7 +278,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     });
 
     // Setup confirmation callback
-    mqttService.setConfirmationCallback((result) => {
+    sseService.setConfirmationCallback((result) => {
       const { testId, message, cycle } = result;
   setConfirmationData({ testId, message, cycle });
       setShowConfirmationModal(true);
@@ -288,7 +289,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
   // Handle confirmation response
   const handleConfirmation = (confirmed) => {
     if (confirmationData && confirmationData.testId) {
-      mqttService.sendConfirmation(confirmationData.testId, confirmed);
+      sseService.sendConfirmation(confirmationData.testId, confirmed);
       if (confirmed) {
   addLog && addLog(`Sent confirmation for test ${confirmationData.testId}: Continue to next cycle`);
       } else {
@@ -338,14 +339,15 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         url += `?${params.toString()}`;
       }
       
-      const response = await fetch(url);
+      const response = await authFetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      setRuns(data);
+      // Handle new paginated response format
+      setRuns(data.data || data);
       
     } catch (error) {
       console.error('Error fetching runs:', error);
@@ -392,7 +394,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     addLog && addLog(`Rerunning test: ${run.trial_name} (${run.trial_id}) from stage ${startStage}`);
    
     if (mqttConnected) {
-      const success = mqttService.sendStartCommand(run.trial_id, startStage);  // Send start command to RPI via MQTT
+      const success = sseService.sendStartCommand(run.trial_id, startStage);  // Send start command to RPI via MQTT
       if (success) {
         addLog && addLog(`Sent start command to RPI for test: ${run.trial_id} from stage ${startStage}`);
       } else {
@@ -490,7 +492,7 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
     addLog && addLog(`Deleting test: ${run.trial_name} (${run.trial_id})`);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
+      const response = await authFetch(`${API_BASE_URL}/runs/${run.trial_id}`, {
         method: 'DELETE',
       });
 
@@ -735,9 +737,9 @@ export default function HomePage({ addLog, mqttConnected: mqttConnectedProp }) {
         activeTestId={activeTestId}
         onResultsUpdate={(results) => setTestResults(results)}
         onEmergencyStop={() => {
-          if (activeTestId && mqttService?.client?.connected) {
+          if (activeTestId && sseService?.client?.connected) {
             // Send stop command to RPI via MQTT
-            mqttService.client.publish('ur2/test/init', JSON.stringify({
+            sseService.client.publish('ur2/test/init', JSON.stringify({
               command: 'stop',
               testId: activeTestId,
               timestamp: new Date().toISOString()

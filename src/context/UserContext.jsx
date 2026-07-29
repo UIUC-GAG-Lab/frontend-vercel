@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authFetch, getAccessToken, clearAuth } from '../services/authService';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api';
 
 const UserContext = createContext(null);
 
@@ -9,35 +10,32 @@ export function UserProvider({ children }) {
   const [team, setTeam] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const getToken = () => localStorage.getItem('ur2_token');
-
   const syncUser = useCallback(async () => {
     try {
-      const token = getToken();
+      const token = getAccessToken();
       if (!token) {
         setLoading(false);
         return null;
       }
 
       // Sync user data from JWT to database
-      const syncResponse = await fetch(`${API_BASE_URL}/users/sync`, {
+      const syncResponse = await authFetch(`${API_BASE_URL}/users/sync`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!syncResponse.ok) {
         console.error('Failed to sync user');
+        if (syncResponse.status === 401) {
+          // Token refresh already attempted by authFetch — bail if still 401
+          clearAuth();
+        }
         setLoading(false);
         return null;
       }
 
       // Fetch full profile with team info
-      const profileResponse = await fetch(`${API_BASE_URL}/users/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const profileResponse = await authFetch(`${API_BASE_URL}/users/me`);
 
       if (profileResponse.ok) {
         const data = await profileResponse.json();
@@ -71,7 +69,7 @@ export function UserProvider({ children }) {
 
   // Sync user on mount and when token changes
   useEffect(() => {
-    const token = getToken();
+    const token = getAccessToken();
     if (token) {
       syncUser();
     } else {

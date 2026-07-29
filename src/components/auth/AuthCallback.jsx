@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { setAccessToken } from '../../services/authService';
 
 export default function AuthCallback({ onLogin }) {
   const [searchParams] = useSearchParams();
@@ -22,8 +23,8 @@ export default function AuthCallback({ onLogin }) {
           googleId: payload.googleId
         };
         
-        // Store token and user info
-        localStorage.setItem('ur2_token', token);
+        // Store token via auth service and user info
+        setAccessToken(token);
         localStorage.setItem('ur2_user', JSON.stringify(user));
         
         // Call onLogin callback
